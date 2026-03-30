@@ -47,10 +47,8 @@ function MailBodyBlock({ text }) {
         m: 0,
         mt: 0.5,
         p: 1.5,
-        maxHeight: 280,
-        overflow: 'auto',
         bgcolor: 'action.hover',
-        borderRadius: 1,
+        borderRadius: 0.5,
         fontSize: '0.8125rem',
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         whiteSpace: 'pre-wrap',
@@ -102,127 +100,139 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
     }
   }, [open, detailTab, tx?.mail_id])
 
-  const email = mailState.data?.email
-  const enrichment = mailState.data?.enrichment
+  const mail = mailState.data
+  const enrichment = mail?.enrichment
 
   const titleId =
     detailTab === 'email' ? 'detail-source-email-title' : 'transaction-detail-title'
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
-      <DialogTitle
-        id={titleId}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-          pr: 2,
-        }}
-      >
-        <span>
-          {detailTab === 'email' ? 'Source Email' : 'Transaction Details'}
-        </span>
-        {detailTab === 'email' && tx?.mail_id && (
-          <Typography
-            component="span"
-            variant="body2"
-            color="text.secondary"
-            sx={{ fontFamily: 'ui-monospace, monospace', textAlign: 'right', wordBreak: 'break-all' }}
-          >
-            {tx.mail_id}
-          </Typography>
-        )}
-        {detailTab === 'transaction' && tx != null && (
-          <Typography component="span" variant="body2" color="text.secondary">
-            ID {tx.id}
-          </Typography>
-        )}
+      <DialogTitle id={titleId}>
+        {detailTab === 'email' ? 'Source Email' : 'Transaction Details'}
       </DialogTitle>
       <DialogContent dividers>
-        {tx && detailTab === 'transaction' && (
-          <Stack component="div" spacing={0} aria-labelledby="transaction-detail-title">
-            <DetailLine label="Transacted" value={formatDateTime(tx.transacted_at)} />
-            <DetailLine label="Created" value={formatDateTime(tx.created_at)} />
-            <Divider sx={{ my: 1 }} />
-            <DetailLine
-              label="Amount"
-              value={formatMoney(signed, row.currency ?? tx.currency ?? 'USD')}
-            />
-            <DetailLine label="Direction" value={tx.direction} />
-            <DetailLine label="Amount (raw)" value={tx.amount} />
-            <DetailLine label="Currency" value={tx.currency ?? row.currency} />
-            <Divider sx={{ my: 1 }} />
-            <DetailLine label="Provider" value={tx.provider} />
-            <DetailLine label="Transaction type" value={tx.transaction_type} />
-            <DetailLine label="Sub type" value={tx.sub_type} />
-            <DetailLine label="Status" value={tx.status} />
-            <DetailLine label="Transaction ID" value={tx.txn_id} />
-            <DetailLine label="Mail ID" value={tx.mail_id} />
-            <Divider sx={{ my: 1 }} />
-            <DetailLine label="Merchant" value={tx.merchant} />
-            <DetailLine label="Category" value={tx.category} />
-            <DetailLine label="Account" value={row.account} />
-            <DetailLine label="Account ID" value={tx.account_id} />
-            <DetailLine label="Account type" value={tx.account_type} />
-          </Stack>
-        )}
+        {tx && (
+          <Box sx={{ position: 'relative' }}>
+            {/* In-flow: height follows transaction details; stays in layout when hidden */}
+            <Stack
+              component="div"
+              spacing={0}
+              aria-labelledby="transaction-detail-title"
+              aria-hidden={detailTab !== 'transaction'}
+              sx={{
+                visibility: detailTab === 'transaction' ? 'visible' : 'hidden',
+                pointerEvents: detailTab === 'transaction' ? 'auto' : 'none',
+              }}
+            >
+              <DetailLine label="ID" value={tx.id} />
+              <DetailLine label="Transacted" value={formatDateTime(tx.transacted_at)} />
+              <DetailLine label="Created" value={formatDateTime(tx.created_at)} />
+              <Divider sx={{ my: 1 }} />
+              <DetailLine
+                label="Amount"
+                value={formatMoney(signed, row.currency ?? tx.currency ?? 'USD')}
+              />
+              <DetailLine label="Direction" value={tx.direction} />
+              <DetailLine label="Amount (raw)" value={tx.amount} />
+              <DetailLine label="Currency" value={tx.currency ?? row.currency} />
+              <Divider sx={{ my: 1 }} />
+              <DetailLine label="Provider" value={tx.provider} />
+              <DetailLine label="Transaction type" value={tx.transaction_type} />
+              <DetailLine label="Sub type" value={tx.sub_type} />
+              <DetailLine label="Status" value={tx.status} />
+              <DetailLine label="Transaction ID" value={tx.txn_id} />
+              <DetailLine label="Mail ID" value={tx.mail_id} />
+              <Divider sx={{ my: 1 }} />
+              <DetailLine label="Merchant" value={tx.merchant} />
+              <DetailLine label="Category" value={tx.category} />
+              <DetailLine label="Account" value={row.account} />
+              <DetailLine label="Account ID" value={tx.account_id} />
+              <DetailLine label="Account type" value={tx.account_type} />
+            </Stack>
 
-        {tx && detailTab === 'email' && (
-          <Stack spacing={1} aria-labelledby="detail-source-email-title">
-            {mailState.status === 'loading' && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                <CircularProgress size={32} aria-label="Loading email" />
-              </Box>
-            )}
-            {mailState.status === 'error' && (
-              <Alert severity="warning">{mailState.error}</Alert>
-            )}
-            {mailState.status === 'success' && email && (
-              <>
-                <DetailLine label="Subject" value={email.subject} />
-                <DetailLine label="Sender" value={email.sender} />
-                <DetailLine label="Snippet" value={email.snippet} />
-                <DetailLine
-                  label="Internal date"
-                  value={
-                    email.internal_date_ms != null
-                      ? formatDateTime(new Date(email.internal_date_ms).toISOString())
-                      : '—'
-                  }
-                />
-                <DetailLine label="Stored at" value={formatDateTime(email.created_at)} />
-                <Typography variant="body2" color="text.secondary" sx={{ pt: 0.5 }}>
-                  Body
-                </Typography>
-                <MailBodyBlock text={email.body_text} />
-                {enrichment ? (
+            {/* Fills the transaction box; scrolls when email is taller */}
+            <Box
+              sx={{
+                position: 'absolute',
+                inset: 0,
+                overflow: 'auto',
+                visibility: detailTab === 'email' ? 'visible' : 'hidden',
+                pointerEvents: detailTab === 'email' ? 'auto' : 'none',
+              }}
+              aria-hidden={detailTab !== 'email'}
+              aria-labelledby="detail-source-email-title"
+            >
+              <Stack spacing={1}>
+                {tx.mail_id && (
+                  <DetailLine label="Email ID" value={tx.mail_id} />
+                )}
+                {mailState.status === 'loading' && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                    <CircularProgress size={32} aria-label="Loading email" />
+                  </Box>
+                )}
+                {mailState.status === 'error' && (
+                  <Alert severity="warning">{mailState.error}</Alert>
+                )}
+                {mailState.status === 'success' && mail && (
                   <>
+                    <DetailLine label="Subject" value={mail.subject} />
+                    <DetailLine label="Sender" value={mail.sender} />
+                    <DetailLine label="Snippet" value={mail.snippet} />
                     <DetailLine
-                      label="Classification"
+                      label="Internal date"
                       value={
-                        enrichment.classification_name ??
-                        enrichment.classification ??
-                        '—'
+                        mail.internal_date_ms != null
+                          ? formatDateTime(new Date(mail.internal_date_ms).toISOString())
+                          : '—'
                       }
                     />
-                    <DetailLine
-                      label="Parser"
-                      value={enrichment.parser_name ?? '—'}
-                    />
-                    <DetailLine
-                      label="Enrichment updated"
-                      value={formatDateTime(enrichment.updated_at)}
-                    />
+                    <DetailLine label="Stored at" value={formatDateTime(mail.created_at)} />
+                    <Box
+                      component="section"
+                      sx={{
+                        pt: 0.5,
+                        pb: 1.5,
+                      }}
+                    >
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        Body
+                      </Typography>
+                      <MailBodyBlock text={mail.body_text} />
+                    </Box>
+                    {enrichment ? (
+                      <Box component="section">
+                        <DetailLine
+                          label="Classification"
+                          value={
+                            enrichment.classification_name ??
+                            enrichment.classification ??
+                            '—'
+                          }
+                        />
+                        <DetailLine
+                          label="Parser"
+                          value={enrichment.parser_name ?? '—'}
+                        />
+                        <DetailLine
+                          label="Enrichment updated"
+                          value={formatDateTime(enrichment.updated_at)}
+                        />
+                      </Box>
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        No enrichment row for this email.
+                      </Typography>
+                    )}
                   </>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    No enrichment row for this email.
-                  </Typography>
                 )}
-              </>
-            )}
-          </Stack>
+              </Stack>
+            </Box>
+          </Box>
         )}
 
         {!tx && (

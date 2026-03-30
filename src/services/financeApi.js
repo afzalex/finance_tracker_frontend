@@ -3,7 +3,7 @@ import {
   mockAnalytics,
   mockStats,
 } from '../mocks/mockData'
-import { fetchedEmailsApi, transactionsApi } from './apiConfig'
+import { emailsApi, transactionsApi } from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -19,29 +19,14 @@ export function apiErrorMessage(error) {
 }
 
 /**
- * Fetch cached email + enrichment using the generated API client.
- *
- * Note: current OpenAPI client fetches by numeric `fetched_email_id`:
- * `GET /api/v1/fetched-emails/{fetched_email_id}`.
- *
- * We accept the transaction's `mail_id` here because that's what the transaction model exposes.
- * If `mail_id` is not a numeric id in your backend, this will throw with a helpful error.
+ * Cached email row + optional nested enrichment.
+ * `GET /api/v1/emails/{mail_id}` — `mail_id` is the provider message id (e.g. same as `transactions.mail_id`).
  */
 export async function getFetchedEmailByMailId(mailId) {
-  const raw = (mailId ?? '').trim()
+  const raw = String(mailId ?? '').trim()
   if (!raw) throw new Error('Missing mail id')
 
-  const fetchedEmailId = Number.parseInt(raw, 10)
-  if (!Number.isFinite(fetchedEmailId)) {
-    throw new Error(
-      `Email detail API expects numeric fetched_email_id; got mail_id=${JSON.stringify(raw)}`,
-    )
-  }
-
-  const res =
-    await fetchedEmailsApi.getFetchedEmailWithEnrichmentApiV1FetchedEmailsFetchedEmailIdGet(
-      fetchedEmailId,
-    )
+  const res = await emailsApi.getEmailByMailIdApiV1EmailsMailIdGet(raw)
   return res.data
 }
 

@@ -1,4 +1,4 @@
-import { Configuration, FetchedEmailsApi, TransactionsApi } from '../api'
+import { Configuration, EmailsApi, TransactionsApi } from '../api'
 
 export const apiBasePath =
   (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(
@@ -9,4 +9,4 @@ export const apiBasePath =
 const configuration = new Configuration({ basePath: apiBasePath })
 
 export const transactionsApi = new TransactionsApi(configuration)
-export const fetchedEmailsApi = new FetchedEmailsApi(configuration)
+export const emailsApi = new EmailsApi(configuration)

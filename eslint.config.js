@@ -27,11 +27,14 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/test/**/*.{js,jsx}'],
+    files: [
+      'src/test/setup.js',
+      'src/**/*.{test,spec}.{js,jsx,ts,tsx}',
+    ],
     languageOptions: {
       globals: {
         ...globals.browser,
-        vi: 'readonly',
+        ...globals.vitest,
       },
     },
   },

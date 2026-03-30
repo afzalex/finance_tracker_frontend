@@ -43,3 +43,4 @@ coverage/
 *.tgz
 .npmrc.local
 
+src/api/
