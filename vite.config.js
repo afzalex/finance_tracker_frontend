@@ -7,12 +7,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.js'],
-    include: ['src/**/*.{test,spec}.{js,jsx,ts,tsx}'],
+    setupFiles: ['./src/tests/setup.js'],
+    include: ['src/tests/**/*.{test,spec}.{js,jsx,ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      exclude: ['src/test/**', '**/*.config.js'],
+      // OpenAPI client is generated — exclude so the report reflects app code only.
+      exclude: ['src/tests/**', 'src/api/**', '**/*.config.js'],
     },
   },
 })

@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import PageHeader from './PageHeader'
-import { renderWithTheme } from '../test/renderWithTheme'
+import PageHeader from '../../components/PageHeader'
+import { renderWithTheme } from '../renderWithTheme'
 
 describe('PageHeader', () => {
   it('renders title and description', () => {

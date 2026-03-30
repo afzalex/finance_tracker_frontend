@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import App from './App'
-import theme from './theme'
+import App from '../App'
+import theme from '../theme'
 
 function renderApp(initialEntry = '/') {
   return render(

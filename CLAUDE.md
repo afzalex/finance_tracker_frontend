@@ -11,10 +11,10 @@ npm run preview   # Preview production build locally
 npm run lint      # ESLint check
 npm run test      # Vitest (watch mode)
 npm run test:run  # Vitest single run (CI)
-npm run test:coverage  # Vitest with coverage report
+npm run test:coverage  # Vitest with coverage report (generated `src/api` excluded)
 ```
 
-Tests use **Vitest** + **React Testing Library** + **jsdom** (`src/**/*.test.{js,jsx}`).
+Tests use **Vitest** + **React Testing Library** + **jsdom**. Everything lives under `src/tests/`: `setup.js`, `renderWithTheme.jsx`, and spec files (mirroring `components/`, `services/`, etc.).
 
 ## Architecture
 

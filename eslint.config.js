@@ -28,8 +28,9 @@ export default defineConfig([
   },
   {
     files: [
-      'src/test/setup.js',
-      'src/**/*.{test,spec}.{js,jsx,ts,tsx}',
+      'src/tests/setup.js',
+      'src/tests/renderWithTheme.jsx',
+      'src/tests/**/*.{test,spec}.{js,jsx,ts,tsx}',
     ],
     languageOptions: {
       globals: {

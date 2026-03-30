@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatDateTime, formatMoney } from './format'
+import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
 
 describe('formatDate', () => {
   it('returns a non-empty locale string for valid ISO date', () => {

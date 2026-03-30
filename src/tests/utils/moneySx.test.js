@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { balanceAmountSx, signedAmountSx } from './moneySx'
+import { balanceAmountSx, signedAmountSx } from '../../utils/moneySx'
 
 describe('signedAmountSx', () => {
   it('colors negative amounts as error', () => {
