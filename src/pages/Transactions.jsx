@@ -188,6 +188,7 @@ export default function Transactions() {
       </Card>
 
       <TransactionDetailDialog
+        key={selectedRow?.id ?? 'closed'}
         open={Boolean(selectedRow)}
         onClose={closeDetail}
         row={selectedRow}

@@ -120,6 +120,39 @@ export default createTheme({
         }),
       },
     },
+    MuiButton: {
+      defaultProps: {
+        size: 'small',
+      },
+      styleOverrides: {
+        root: {
+          minWidth: 100,
+          textTransform: 'none',
+        },
+        sizeSmall: {
+          minHeight: 30,
+          paddingTop: 4,
+          paddingBottom: 4,
+          paddingLeft: 12,
+          paddingRight: 12,
+        },
+      },
+    },
+    MuiIconButton: {
+      defaultProps: {
+        size: 'small',
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: {
+          paddingTop: 8,
+          paddingBottom: 8,
+          paddingLeft: 16,
+          paddingRight: 16,
+        },
+      },
+    },
   },
 })
 

@@ -1,13 +1,14 @@
+import axios from 'axios'
 import {
   mockAccounts,
   mockAnalytics,
   mockStats,
 } from '../mocks/mockData'
-import { accountsApi, transactionsApi } from './apiConfig'
+import { accountsApi, apiBasePath, transactionsApi } from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-function httpErrorMessage(error) {
+export function apiErrorMessage(error) {
   const data = error?.response?.data
   const detail = data?.detail
   if (typeof detail === 'string') return detail
@@ -16,6 +17,19 @@ function httpErrorMessage(error) {
     if (parts.length) return parts.join(', ')
   }
   return error?.message ?? 'Request failed'
+}
+
+/** Cached email + optional enrichment for a provider ``mail_id`` (see ``GET /api/v1/fetched-emails/by-mail-id``). */
+export async function getFetchedEmailByMailId(mailId) {
+  const mid = (mailId ?? '').trim()
+  if (!mid) {
+    throw new Error('Missing mail id')
+  }
+  const { data } = await axios.get(
+    `${apiBasePath}/api/v1/fetched-emails/by-mail-id`,
+    { params: { mail_id: mid } },
+  )
+  return data
 }
 
 function signedAmountFromTx(tx) {
@@ -79,7 +93,7 @@ export async function listTransactions({ query, page, pageSize } = {}) {
   ])
 
   if (txResult.status === 'rejected') {
-    throw new Error(httpErrorMessage(txResult.reason))
+    throw new Error(apiErrorMessage(txResult.reason))
   }
 
   const accountById = new Map()
