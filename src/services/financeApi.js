@@ -1,10 +1,9 @@
-import axios from 'axios'
 import {
   mockAccounts,
   mockAnalytics,
   mockStats,
 } from '../mocks/mockData'
-import { accountsApi, apiBasePath, transactionsApi } from './apiConfig'
+import { fetchedEmailsApi, transactionsApi } from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -19,17 +18,31 @@ export function apiErrorMessage(error) {
   return error?.message ?? 'Request failed'
 }
 
-/** Cached email + optional enrichment for a provider ``mail_id`` (see ``GET /api/v1/fetched-emails/by-mail-id``). */
+/**
+ * Fetch cached email + enrichment using the generated API client.
+ *
+ * Note: current OpenAPI client fetches by numeric `fetched_email_id`:
+ * `GET /api/v1/fetched-emails/{fetched_email_id}`.
+ *
+ * We accept the transaction's `mail_id` here because that's what the transaction model exposes.
+ * If `mail_id` is not a numeric id in your backend, this will throw with a helpful error.
+ */
 export async function getFetchedEmailByMailId(mailId) {
-  const mid = (mailId ?? '').trim()
-  if (!mid) {
-    throw new Error('Missing mail id')
+  const raw = (mailId ?? '').trim()
+  if (!raw) throw new Error('Missing mail id')
+
+  const fetchedEmailId = Number.parseInt(raw, 10)
+  if (!Number.isFinite(fetchedEmailId)) {
+    throw new Error(
+      `Email detail API expects numeric fetched_email_id; got mail_id=${JSON.stringify(raw)}`,
+    )
   }
-  const { data } = await axios.get(
-    `${apiBasePath}/api/v1/fetched-emails/by-mail-id`,
-    { params: { mail_id: mid } },
-  )
-  return data
+
+  const res =
+    await fetchedEmailsApi.getFetchedEmailWithEnrichmentApiV1FetchedEmailsFetchedEmailIdGet(
+      fetchedEmailId,
+    )
+  return res.data
 }
 
 function signedAmountFromTx(tx) {
@@ -37,11 +50,10 @@ function signedAmountFromTx(tx) {
   return tx.direction === 'CREDIT' ? n : -n
 }
 
-function mapTransactionRow(tx, accountById) {
+function mapTransactionRow(tx) {
   const aid = tx.account_id ?? ''
-  const acc = aid ? accountById.get(aid) : null
   const accountLabel =
-    acc?.display_name ?? acc?.account_id ?? (aid || '—')
+    [aid, tx.account_type].filter(Boolean).join(' · ') || '—'
   const typeParts = [tx.transaction_type, tx.sub_type].filter(Boolean)
   return {
     id: String(tx.id),
@@ -75,38 +87,22 @@ export async function listTransactions({ query, page, pageSize } = {}) {
   const currentPageSize = Math.max(1, pageSize ?? 10)
   const search = (query ?? '').trim() || undefined
 
-  const [accountsResult, txResult] = await Promise.allSettled([
-    accountsApi.listAccountsApiV1AccountsGet(),
-    transactionsApi.listTransactionsApiV1TransactionsGet(
-      currentPage,
-      currentPageSize,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      search,
-      'transacted_at',
-      'desc',
-    ),
-  ])
-
-  if (txResult.status === 'rejected') {
-    throw new Error(apiErrorMessage(txResult.reason))
-  }
-
-  const accountById = new Map()
-  if (accountsResult.status === 'fulfilled') {
-    for (const a of accountsResult.value.data ?? []) {
-      accountById.set(a.account_id, a)
-    }
-  }
-
-  const body = txResult.value.data
-  const items = (body.items ?? []).map((tx) =>
-    mapTransactionRow(tx, accountById),
+  const txResult = await transactionsApi.listTransactionsApiV1TransactionsGet(
+    currentPage,
+    currentPageSize,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    search,
+    'transacted_at',
+    'desc',
   )
+
+  const body = txResult.data
+  const items = (body.items ?? []).map((tx) => mapTransactionRow(tx))
 
   return {
     items,

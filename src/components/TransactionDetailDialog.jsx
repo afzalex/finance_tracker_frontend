@@ -110,21 +110,40 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
-      <DialogTitle id={titleId}>
-        {detailTab === 'email' ? 'Source Email' : 'Transaction details'}
+      <DialogTitle
+        id={titleId}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 2,
+          pr: 2,
+        }}
+      >
+        <span>
+          {detailTab === 'email' ? 'Source Email' : 'Transaction Details'}
+        </span>
+        {detailTab === 'email' && tx?.mail_id && (
+          <Typography
+            component="span"
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontFamily: 'ui-monospace, monospace', textAlign: 'right', wordBreak: 'break-all' }}
+          >
+            {tx.mail_id}
+          </Typography>
+        )}
+        {detailTab === 'transaction' && tx != null && (
+          <Typography component="span" variant="body2" color="text.secondary">
+            ID {tx.id}
+          </Typography>
+        )}
       </DialogTitle>
       <DialogContent dividers>
         {tx && detailTab === 'transaction' && (
           <Stack component="div" spacing={0} aria-labelledby="transaction-detail-title">
-            <DetailLine label="ID" value={tx.id} />
             <DetailLine label="Transacted" value={formatDateTime(tx.transacted_at)} />
             <DetailLine label="Created" value={formatDateTime(tx.created_at)} />
-            <Divider sx={{ my: 1 }} />
-            <DetailLine label="Merchant" value={tx.merchant} />
-            <DetailLine label="Category" value={tx.category} />
-            <DetailLine label="Account" value={row.account} />
-            <DetailLine label="Account ID" value={tx.account_id} />
-            <DetailLine label="Account type" value={tx.account_type} />
             <Divider sx={{ my: 1 }} />
             <DetailLine
               label="Amount"
@@ -140,6 +159,12 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
             <DetailLine label="Status" value={tx.status} />
             <DetailLine label="Transaction ID" value={tx.txn_id} />
             <DetailLine label="Mail ID" value={tx.mail_id} />
+            <Divider sx={{ my: 1 }} />
+            <DetailLine label="Merchant" value={tx.merchant} />
+            <DetailLine label="Category" value={tx.category} />
+            <DetailLine label="Account" value={row.account} />
+            <DetailLine label="Account ID" value={tx.account_id} />
+            <DetailLine label="Account type" value={tx.account_type} />
           </Stack>
         )}
 
@@ -155,12 +180,9 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
             )}
             {mailState.status === 'success' && email && (
               <>
-                <DetailLine label="Email row ID" value={email.id} />
-                <DetailLine label="Mail ID" value={email.mail_id} />
                 <DetailLine label="Subject" value={email.subject} />
                 <DetailLine label="Sender" value={email.sender} />
                 <DetailLine label="Snippet" value={email.snippet} />
-                <DetailLine label="Thread ID" value={email.thread_id} />
                 <DetailLine
                   label="Internal date"
                   value={
@@ -176,16 +198,18 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
                 <MailBodyBlock text={email.body_text} />
                 {enrichment ? (
                   <>
-                    <Typography variant="subtitle2" color="text.secondary" sx={{ pt: 1 }}>
-                      Parser / classification
-                    </Typography>
-                    <DetailLine label="Classification" value={enrichment.classification} />
                     <DetailLine
-                      label="Classification reason"
-                      value={enrichment.classification_reason}
+                      label="Classification"
+                      value={
+                        enrichment.classification_name ??
+                        enrichment.classification ??
+                        '—'
+                      }
                     />
-                    <DetailLine label="Classification ID" value={enrichment.classification_id} />
-                    <DetailLine label="Parser ID" value={enrichment.parser_id} />
+                    <DetailLine
+                      label="Parser"
+                      value={enrichment.parser_name ?? '—'}
+                    />
                     <DetailLine
                       label="Enrichment updated"
                       value={formatDateTime(enrichment.updated_at)}
