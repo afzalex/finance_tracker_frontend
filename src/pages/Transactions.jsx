@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -15,10 +15,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
 import TransactionDetailDialog from '../components/TransactionDetailDialog'
-import { listTransactions } from '../services/financeApi'
+import { apiErrorMessage, findTransactionRowById, listTransactions } from '../services/financeApi'
 import useResource from '../hooks/useResource'
 import { signedAmountSx } from '../utils/moneySx'
 import { formatDateTime } from '../utils/format'
@@ -42,10 +43,24 @@ const clipCellSx = {
 }
 
 export default function Transactions() {
+  const navigate = useNavigate()
+  const params = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const routeTransactionId = params.transactionId ? String(params.transactionId) : null
+  const tabParam = String(searchParams.get('tab') ?? '').toLowerCase()
+
   const [query, setQuery] = useState('')
-  const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(25)
+  const [page, setPage] = useState(() => {
+    const n = Number(searchParams.get('page'))
+    return Number.isFinite(n) && n >= 0 ? n : 0
+  })
+  const [rowsPerPage, setRowsPerPage] = useState(() => {
+    const n = Number(searchParams.get('ps'))
+    return Number.isFinite(n) && n > 0 ? n : 25
+  })
   const [selectedRow, setSelectedRow] = useState(null)
+  const suppressRouteOpenRef = useRef(false)
 
   const resourceKey = `transactions:${query}:${page}:${rowsPerPage}`
   const { status, data, error } = useResource(resourceKey, () =>
@@ -59,12 +74,108 @@ export default function Transactions() {
   const rows = useMemo(() => data?.items ?? [], [data])
   const total = data?.total ?? 0
 
+  useEffect(() => {
+    // Keep page + page size in the URL (but avoid syncing other state).
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev)
+      sp.set('ps', String(rowsPerPage))
+      sp.set('page', String(page))
+      return sp
+    }, { replace: true })
+  }, [page, rowsPerPage, setSearchParams])
+
+  useEffect(() => {
+    // If user edits page/ps in the URL (or uses Back/Forward), reflect it in state.
+    const psFromUrl = Number(searchParams.get('ps'))
+    const pageFromUrl = Number(searchParams.get('page'))
+
+    const nextPs =
+      Number.isFinite(psFromUrl) && psFromUrl > 0 ? psFromUrl : rowsPerPage
+    const nextPage =
+      Number.isFinite(pageFromUrl) && pageFromUrl >= 0 ? pageFromUrl : page
+
+    if (nextPs !== rowsPerPage) {
+      setRowsPerPage(nextPs)
+      setPage(0)
+      return
+    }
+
+    if (nextPage !== page) {
+      setPage(nextPage)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  useEffect(() => {
+    // Once the URL no longer points at a specific transaction, allow auto-open again.
+    if (!routeTransactionId) suppressRouteOpenRef.current = false
+  }, [routeTransactionId])
+
+  const [routeOpenError, setRouteOpenError] = useState(null)
+  const [routeOpening, setRouteOpening] = useState(false)
+
+  useEffect(() => {
+    if (!routeTransactionId) {
+      setSelectedRow(null)
+      setRouteOpenError(null)
+      return
+    }
+    if (suppressRouteOpenRef.current) return
+    if (selectedRow && String(selectedRow.id) === String(routeTransactionId)) return
+
+    const matchInPage = rows.find((r) => String(r.id) === String(routeTransactionId))
+    if (matchInPage) {
+      setSelectedRow(matchInPage)
+      setRouteOpenError(null)
+      return
+    }
+
+    // Deep link: scan pages to find the transaction id (without changing the filter field).
+    let cancelled = false
+    setRouteOpening(true)
+    setRouteOpenError(null)
+    findTransactionRowById(routeTransactionId, { pageSize: rowsPerPage })
+      .then((found) => {
+        if (cancelled) return
+        if (found) {
+          setSelectedRow(found)
+          return
+        }
+        setRouteOpenError(`Transaction ${routeTransactionId} not found in recent pages.`)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setRouteOpenError(apiErrorMessage(e))
+      })
+      .finally(() => {
+        if (!cancelled) setRouteOpening(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [routeTransactionId, rows, rowsPerPage, selectedRow])
+
   const handleQueryChange = (e) => {
     setQuery(e.target.value)
     setPage(0)
   }
 
-  const closeDetail = () => setSelectedRow(null)
+  const openDetail = (
+    row,
+    nextTab = tabParam === 'email' ? 'email' : 'transaction',
+  ) =>
+    navigate(
+      `/transactions/${row.id}?tab=${nextTab}&ps=${rowsPerPage}&page=${page}`,
+    )
+
+  const closeDetail = () => {
+    suppressRouteOpenRef.current = true
+    navigate(`/transactions?ps=${rowsPerPage}&page=${page}`)
+    setSelectedRow(null)
+  }
+
+  const detailTab = tabParam === 'email' ? 'email' : 'transaction'
 
   return (
     <Stack spacing={2}>
@@ -82,6 +193,7 @@ export default function Transactions() {
       />
 
       {error && <Alert severity="error">{error}</Alert>}
+      {routeOpenError && <Alert severity="warning">{routeOpenError}</Alert>}
 
       <Card variant="outlined">
         <CardContent>
@@ -94,6 +206,8 @@ export default function Transactions() {
           <Divider sx={{ mb: 1 }} />
 
           {status === 'loading' ? (
+            <LoadingBlock />
+          ) : routeOpening ? (
             <LoadingBlock />
           ) : (
             <Box sx={{ width: '100%', overflowX: 'auto' }}>
@@ -119,21 +233,21 @@ export default function Transactions() {
                   {rows.map((t) => {
                     const when = formatDateTime(t.date)
                     return (
-                    <TableRow
-                      key={t.id}
-                      hover
-                      onClick={() => setSelectedRow(t)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          setSelectedRow(t)
-                        }
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`View details for transaction ${t.id}`}
-                      sx={{ cursor: 'pointer' }}
-                    >
+                      <TableRow
+                        key={t.id}
+                        hover
+                        onClick={() => openDetail(t, 'transaction')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            openDetail(t, 'transaction')
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`View details for transaction ${t.id}`}
+                        sx={{ cursor: 'pointer' }}
+                      >
                       <TableCell sx={clipCellSx} title={when}>
                         {when}
                       </TableCell>
@@ -156,7 +270,7 @@ export default function Transactions() {
                       >
                         {t.amountRaw}
                       </TableCell>
-                    </TableRow>
+                      </TableRow>
                     )
                   })}
                   {rows.length === 0 && (
@@ -192,6 +306,11 @@ export default function Transactions() {
         open={Boolean(selectedRow)}
         onClose={closeDetail}
         row={selectedRow}
+        initialTab={detailTab}
+        onTabChange={(t) => {
+          if (!selectedRow) return
+          openDetail(selectedRow, t)
+        }}
       />
     </Stack>
   )

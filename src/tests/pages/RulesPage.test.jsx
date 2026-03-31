@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import RulesPage from '../../pages/RulesPage'
 import { renderWithTheme } from '../renderWithTheme'
@@ -47,7 +48,13 @@ describe('RulesPage', () => {
       },
     ])
 
-    renderWithTheme(<RulesPage />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
+        <Routes>
+          <Route path="/settings/rules" element={<RulesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       expect(screen.getByText('Cat A')).toBeInTheDocument()
@@ -78,7 +85,13 @@ describe('RulesPage', () => {
 
     vi.mocked(createClassification).mockResolvedValue({ id: 2 })
 
-    renderWithTheme(<RulesPage />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
+        <Routes>
+          <Route path="/settings/rules" element={<RulesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       expect(screen.getByText('No classifications found.')).toBeInTheDocument()
@@ -119,7 +132,18 @@ describe('RulesPage', () => {
     vi.mocked(createClassification).mockResolvedValue({ id: 1 })
     vi.mocked(createParser).mockResolvedValue({ id: 1 })
 
-    renderWithTheme(<RulesPage />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
+        <Routes>
+          <Route path="/settings/rules" element={<RulesPage />} />
+          <Route
+            path="/settings/rules/classifications/:classificationId"
+            element={<RulesPage />}
+          />
+          <Route path="/settings/rules/parsers/:parserId" element={<RulesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     const user = userEvent.setup()
 
@@ -158,7 +182,17 @@ describe('RulesPage', () => {
     vi.mocked(patchClassification).mockResolvedValue({ id: 1 })
     vi.mocked(deactivateClassification).mockResolvedValue({ id: 1 })
 
-    renderWithTheme(<RulesPage />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
+        <Routes>
+          <Route path="/settings/rules" element={<RulesPage />} />
+          <Route
+            path="/settings/rules/classifications/:classificationId"
+            element={<RulesPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
     const user = userEvent.setup()
 
     await user.click(await screen.findByText('Rule 1'))

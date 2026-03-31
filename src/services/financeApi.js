@@ -97,6 +97,27 @@ export async function listTransactions({ query, page, pageSize } = {}) {
   }
 }
 
+/**
+ * Attempts to locate a transaction row by its numeric id by scanning pages.
+ * This is used for deep-links like `/transactions/:id` when backend search does not support id lookup.
+ */
+export async function findTransactionRowById(
+  transactionId,
+  { pageSize = 25, maxPages = 20 } = {},
+) {
+  const id = String(transactionId ?? '').trim()
+  if (!id) throw new Error('Missing transaction id')
+
+  for (let p = 1; p <= maxPages; p += 1) {
+    const res = await listTransactions({ page: p, pageSize })
+    const match = (res.items ?? []).find((t) => String(t.id) === id)
+    if (match) return match
+    if ((res.items ?? []).length === 0) break
+  }
+
+  return null
+}
+
 export async function getAnalytics() {
   await sleep(150)
   return mockAnalytics

@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TransactionDetailDialog from '../../components/TransactionDetailDialog'
 import { renderWithTheme } from '../renderWithTheme'
@@ -130,14 +131,18 @@ describe('TransactionDetailDialog', () => {
       enrichment: {
         classification_name: 'transaction',
         classification: null,
+        classification_id: 12,
         parser_name: 'default',
+        parser_id: 34,
         updated_at: '2024-06-02T00:00:00Z',
       },
     })
 
     const user = userEvent.setup()
     renderWithTheme(
-      <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
+      <MemoryRouter>
+        <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />
+      </MemoryRouter>,
     )
 
     await user.click(screen.getByRole('button', { name: 'Source Email' }))
@@ -146,6 +151,13 @@ describe('TransactionDetailDialog', () => {
       expect(screen.getByText('transaction')).toBeInTheDocument()
     })
     expect(screen.getByText('default')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'transaction' }),
+    ).toHaveAttribute('href', '/settings/rules/classifications/12?tab=classifications')
+    expect(screen.getByRole('link', { name: 'default' })).toHaveAttribute(
+      'href',
+      '/settings/rules/parsers/34?tab=parsers',
+    )
   })
 
   it('calls onClose when Close is clicked', async () => {

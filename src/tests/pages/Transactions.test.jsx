@@ -1,12 +1,14 @@
 import { screen, waitFor, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import Transactions from '../../pages/Transactions'
 import { renderWithTheme } from '../renderWithTheme'
 import * as financeApi from '../../services/financeApi'
 
 vi.mock('../../services/financeApi', () => ({
   listTransactions: vi.fn(),
+  findTransactionRowById: vi.fn(),
 }))
 
 describe('Transactions', () => {
@@ -33,7 +35,14 @@ describe('Transactions', () => {
       total: 100
     })
 
-    renderWithTheme(<Transactions />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/transactions']}>
+        <Routes>
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/:transactionId" element={<Transactions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
@@ -74,10 +83,10 @@ describe('Transactions', () => {
       expect(screen.getByText('Coffee')).toBeInTheDocument()
     })
 
-    // Test clicking row to open dialog
+    // Test clicking row to open dialog (via route)
     await user.click(screen.getByText('Coffee'))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
-    expect(screen.getAllByText('Starbucks')[1]).toBeInTheDocument() // The dialog title or merchant value
+    expect(screen.getAllByText('Starbucks')[1]).toBeInTheDocument()
 
     // Close Dialog
     await user.click(screen.getByRole('button', { name: /close/i }))
@@ -103,7 +112,14 @@ describe('Transactions', () => {
       total: 0
     })
 
-    renderWithTheme(<Transactions />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/transactions']}>
+        <Routes>
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/:transactionId" element={<Transactions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       expect(screen.getByText('No matching transactions.')).toBeInTheDocument()
@@ -113,7 +129,14 @@ describe('Transactions', () => {
   it('renders API error message', async () => {
     financeApi.listTransactions.mockRejectedValueOnce(new Error('Transaction fetch failed'))
 
-    renderWithTheme(<Transactions />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/transactions']}>
+        <Routes>
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/:transactionId" element={<Transactions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       expect(screen.getByText('Transaction fetch failed')).toBeInTheDocument()
@@ -139,7 +162,14 @@ describe('Transactions', () => {
       total: 100
     })
 
-    renderWithTheme(<Transactions />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/transactions']}>
+        <Routes>
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/:transactionId" element={<Transactions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
 
     await waitFor(() => {
       expect(screen.getByText('Keyboard Payment')).toBeInTheDocument()
@@ -159,7 +189,14 @@ describe('Transactions', () => {
         total: 100
     })
 
-    renderWithTheme(<Transactions />)
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/transactions']}>
+        <Routes>
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/:transactionId" element={<Transactions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
     await waitFor(() => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     })

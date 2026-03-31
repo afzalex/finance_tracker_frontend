@@ -47,7 +47,13 @@ function toNullablePriority(v) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function ClassificationsSection({ showInactive, createRequestId }) {
+export default function ClassificationsSection({
+  showInactive,
+  createRequestId,
+  routeId,
+  onOpenRule,
+  onCloseRule,
+}) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [mutationError, setMutationError] = useState(null)
   const [errorSnack, setErrorSnack] = useState({ open: false, message: '' })
@@ -113,12 +119,11 @@ export default function ClassificationsSection({ showInactive, createRequestId }
 
   const [form, setForm] = useState(emptyForm)
 
-  const closeDialog = () =>
-    setDialog({
-      open: false,
-      mode: 'create',
-      rule: null,
-    })
+  const closeDialog = () => {
+    const wasEdit = dialog.mode === 'edit'
+    setDialog({ open: false, mode: 'create', rule: null })
+    if (wasEdit) onCloseRule?.()
+  }
 
   const openCreate = () => {
     setMutationError(null)
@@ -132,7 +137,7 @@ export default function ClassificationsSection({ showInactive, createRequestId }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createRequestId])
 
-  const openEdit = (rule) => {
+  const openEdit = (rule, { syncUrl } = { syncUrl: true }) => {
     setMutationError(null)
     setForm({
       message_type: rule.message_type ?? '',
@@ -147,7 +152,24 @@ export default function ClassificationsSection({ showInactive, createRequestId }
       snippet_extract_regex: rule.snippet_extract_regex ?? '',
     })
     setDialog({ open: true, mode: 'edit', rule })
+    if (syncUrl) onOpenRule?.(rule.id)
   }
+
+  useEffect(() => {
+    if (routeId == null) return
+    const rule = classifications.find((c) => c.id === routeId)
+    if (!rule) return
+    if (dialog.open && dialog.mode === 'edit' && dialog.rule?.id === routeId) return
+    openEdit(rule, { syncUrl: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, classifications])
+
+  useEffect(() => {
+    // If the URL no longer points at a specific classification, close the edit dialog.
+    if (routeId != null) return
+    if (!dialog.open || dialog.mode !== 'edit') return
+    setDialog({ open: false, mode: 'create', rule: null })
+  }, [routeId, dialog.open, dialog.mode])
 
   const [deactivateState, setDeactivateState] = useState({
     open: false,

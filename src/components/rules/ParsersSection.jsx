@@ -52,7 +52,13 @@ function toNullableNumber(v) {
   return Number.isFinite(n) ? n : null
 }
 
-export default function ParsersSection({ showInactive, createRequestId }) {
+export default function ParsersSection({
+  showInactive,
+  createRequestId,
+  routeId,
+  onOpenRule,
+  onCloseRule,
+}) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [mutationError, setMutationError] = useState(null)
   const [errorSnack, setErrorSnack] = useState({ open: false, message: '' })
@@ -124,12 +130,11 @@ export default function ParsersSection({ showInactive, createRequestId }) {
 
   const [form, setForm] = useState(emptyForm)
 
-  const closeDialog = () =>
-    setDialog({
-      open: false,
-      mode: 'create',
-      rule: null,
-    })
+  const closeDialog = () => {
+    const wasEdit = dialog.mode === 'edit'
+    setDialog({ open: false, mode: 'create', rule: null })
+    if (wasEdit) onCloseRule?.()
+  }
 
   const openCreate = () => {
     setMutationError(null)
@@ -143,7 +148,7 @@ export default function ParsersSection({ showInactive, createRequestId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createRequestId])
 
-  const openEdit = (rule) => {
+  const openEdit = (rule, { syncUrl } = { syncUrl: true }) => {
     setMutationError(null)
     setForm({
       label: rule.label ?? '',
@@ -165,7 +170,24 @@ export default function ParsersSection({ showInactive, createRequestId }) {
       txn_time_fmt: rule.txn_time_fmt ?? '',
     })
     setDialog({ open: true, mode: 'edit', rule })
+    if (syncUrl) onOpenRule?.(rule.id)
   }
+
+  useEffect(() => {
+    if (routeId == null) return
+    const rule = parsers.find((p) => p.id === routeId)
+    if (!rule) return
+    if (dialog.open && dialog.mode === 'edit' && dialog.rule?.id === routeId) return
+    openEdit(rule, { syncUrl: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId, parsers])
+
+  useEffect(() => {
+    // If the URL no longer points at a specific parser, close the edit dialog.
+    if (routeId != null) return
+    if (!dialog.open || dialog.mode !== 'edit') return
+    setDialog({ open: false, mode: 'create', rule: null })
+  }, [routeId, dialog.open, dialog.mode])
 
   const [deactivateState, setDeactivateState] = useState({
     open: false,

@@ -13,10 +13,16 @@ function App() {
       <Route element={<AppShell />}>
         <Route index element={<Dashboard />} />
         <Route path="transactions" element={<Transactions />} />
+        <Route path="transactions/:transactionId" element={<Transactions />} />
         <Route path="accounts" element={<Accounts />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<Settings />} />
         <Route path="settings/rules" element={<RulesPage />} />
+        <Route
+          path="settings/rules/classifications/:classificationId"
+          element={<RulesPage />}
+        />
+        <Route path="settings/rules/parsers/:parserId" element={<RulesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

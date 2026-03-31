@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { isValidElement, useEffect, useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -9,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Link,
   Stack,
   Typography,
 } from '@mui/material'
@@ -17,7 +19,11 @@ import { formatDateTime, formatMoney } from '../utils/format'
 
 function DetailLine({ label, value }) {
   const display =
-    value === null || value === undefined || value === '' ? '—' : String(value)
+    value === null || value === undefined || value === ''
+      ? '—'
+      : isValidElement(value)
+        ? value
+        : String(value)
   return (
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
@@ -60,7 +66,13 @@ function MailBodyBlock({ text }) {
   )
 }
 
-export default function TransactionDetailDialog({ open, onClose, row }) {
+export default function TransactionDetailDialog({
+  open,
+  onClose,
+  row,
+  initialTab,
+  onTabChange,
+}) {
   const tx = row?.raw
   const signed = tx
     ? tx.direction === 'CREDIT'
@@ -68,7 +80,7 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
       : -(tx.amount_parsed ?? 0)
     : 0
 
-  const [detailTab, setDetailTab] = useState('transaction')
+  const [detailTab, setDetailTab] = useState(initialTab ?? 'transaction')
   const [mailState, setMailState] = useState({
     status: 'idle',
     data: null,
@@ -99,6 +111,12 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
       cancelled = true
     }
   }, [open, detailTab, tx?.mail_id])
+
+  useEffect(() => {
+    if (!open) return
+    if (!initialTab) return
+    setDetailTab(initialTab)
+  }, [open, initialTab])
 
   const mail = mailState.data
   const enrichment = mail?.enrichment
@@ -206,14 +224,38 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
                         <DetailLine
                           label="Classification"
                           value={
-                            enrichment.classification_name ??
-                            enrichment.classification ??
-                            '—'
+                            enrichment.classification_id ? (
+                              <Link
+                                component={RouterLink}
+                                to={`/settings/rules/classifications/${enrichment.classification_id}?tab=classifications`}
+                                underline="hover"
+                              >
+                                {enrichment.classification_name ??
+                                  enrichment.classification ??
+                                  String(enrichment.classification_id)}
+                              </Link>
+                            ) : (
+                              enrichment.classification_name ??
+                              enrichment.classification ??
+                              '—'
+                            )
                           }
                         />
                         <DetailLine
                           label="Parser"
-                          value={enrichment.parser_name ?? '—'}
+                          value={
+                            enrichment.parser_id ? (
+                              <Link
+                                component={RouterLink}
+                                to={`/settings/rules/parsers/${enrichment.parser_id}?tab=parsers`}
+                                underline="hover"
+                              >
+                                {enrichment.parser_name ?? String(enrichment.parser_id)}
+                              </Link>
+                            ) : (
+                              enrichment.parser_name ?? '—'
+                            )
+                          }
                         />
                         <DetailLine
                           label="Enrichment updated"
@@ -244,14 +286,20 @@ export default function TransactionDetailDialog({ open, onClose, row }) {
       <DialogActions sx={{ gap: 1, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
         <Button
           variant={detailTab === 'transaction' ? 'contained' : 'outlined'}
-          onClick={() => setDetailTab('transaction')}
+          onClick={() => {
+            setDetailTab('transaction')
+            onTabChange?.('transaction')
+          }}
           disabled={!tx}
         >
           Transaction
         </Button>
         <Button
           variant={detailTab === 'email' ? 'contained' : 'outlined'}
-          onClick={() => setDetailTab('email')}
+          onClick={() => {
+            setDetailTab('email')
+            onTabChange?.('email')
+          }}
           disabled={!tx?.mail_id}
         >
           Source Email
