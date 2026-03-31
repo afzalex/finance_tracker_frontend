@@ -1,4 +1,5 @@
-import { Alert, Card, CardContent, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
+import { Link } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 
 export default function Settings() {
@@ -20,6 +21,21 @@ export default function Settings() {
           <Typography variant="body2" color="text.secondary">
             Planned: configurable base URL and connectivity check.
           </Typography>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined">
+        <CardContent>
+          <Typography variant="h6">Rules</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Configure email classifications and transaction parsers.
+          </Typography>
+
+          <Box sx={{ mt: 2 }}>
+            <Button component={Link} to="/settings/rules" variant="contained">
+              Manage Classifications & Parsers
+            </Button>
+          </Box>
         </CardContent>
       </Card>
     </Stack>

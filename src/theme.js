@@ -153,6 +153,20 @@ export default createTheme({
         },
       },
     },
+    MuiTextField: {
+      defaultProps: {
+        variant: 'outlined',
+        size: 'small',
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          // Keep cards/papers rounded, but make form fields tighter.
+          borderRadius: 8,
+        },
+      },
+    },
   },
 })
 

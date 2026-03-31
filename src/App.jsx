@@ -5,6 +5,7 @@ import Transactions from './pages/Transactions'
 import Accounts from './pages/Accounts'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
+import RulesPage from './pages/RulesPage'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
         <Route path="accounts" element={<Accounts />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="settings/rules" element={<RulesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

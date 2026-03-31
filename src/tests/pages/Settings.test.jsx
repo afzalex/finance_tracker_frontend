@@ -2,10 +2,15 @@ import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import Settings from '../../pages/Settings'
 import { renderWithTheme } from '../renderWithTheme'
+import { MemoryRouter } from 'react-router-dom'
 
 describe('Settings', () => {
   it('renders settings page elements', () => {
-    renderWithTheme(<Settings />)
+    renderWithTheme(
+      <MemoryRouter>
+        <Settings />
+      </MemoryRouter>,
+    )
     
     expect(screen.getByText('Settings')).toBeInTheDocument()
     expect(screen.getByText('Placeholder settings page.')).toBeInTheDocument()
