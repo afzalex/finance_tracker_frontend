@@ -1,8 +1,13 @@
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import Settings from '../../pages/Settings'
 import { renderWithTheme } from '../renderWithTheme'
 import { MemoryRouter } from 'react-router-dom'
+import { reprocessAllEmailsOffline } from '../../services/financeApi'
+
+vi.mock('../../services/financeApi', () => ({
+  reprocessAllEmailsOffline: vi.fn(),
+}))
 
 describe('Settings', () => {
   it('renders settings page elements', () => {
@@ -20,6 +25,9 @@ describe('Settings', () => {
     expect(screen.getByText('API')).toBeInTheDocument()
     expect(
       screen.getByText(/Planned: configurable base URL and connectivity check./i)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Reprocess All Emails/i }),
     ).toBeInTheDocument()
   })
 })

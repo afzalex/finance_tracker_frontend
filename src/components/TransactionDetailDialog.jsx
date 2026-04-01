@@ -1,5 +1,5 @@
 import { isValidElement, useEffect, useState } from 'react'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useLocation } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -14,7 +14,11 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { apiErrorMessage, getFetchedEmailByMailId } from '../services/financeApi'
+import {
+  apiErrorMessage,
+  getFetchedEmailByMailId,
+  reprocessEmailByMailId,
+} from '../services/financeApi'
 import { formatDateTime, formatMoney } from '../utils/format'
 
 function DetailLine({ label, value }) {
@@ -72,6 +76,7 @@ export default function TransactionDetailDialog({
   row,
   initialTab,
   onTabChange,
+  onNotify,
 }) {
   const tx = row?.raw
   const signed = tx
@@ -86,11 +91,16 @@ export default function TransactionDetailDialog({
     data: null,
     error: null,
   })
+  const [reprocessState, setReprocessState] = useState({ status: 'idle' })
+  const [confirmReprocessOpen, setConfirmReprocessOpen] = useState(false)
+
+  const location = useLocation()
 
   useEffect(() => {
     if (!open || detailTab !== 'email' || !tx?.mail_id) return
     let cancelled = false
     const mid = tx.mail_id
+    setReprocessState({ status: 'idle' })
     queueMicrotask(() => {
       if (!cancelled) setMailState({ status: 'loading', data: null, error: null })
     })
@@ -120,6 +130,16 @@ export default function TransactionDetailDialog({
 
   const mail = mailState.data
   const enrichment = mail?.enrichment
+
+  const classificationLinkTo =
+    enrichment?.classification_id != null
+      ? `/settings/rules/classifications/${enrichment.classification_id}?tab=classifications&returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`
+      : null
+
+  const parserLinkTo =
+    enrichment?.parser_id != null
+      ? `/settings/rules/parsers/${enrichment.parser_id}?tab=parsers&returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`
+      : null
 
   const titleId =
     detailTab === 'email' ? 'detail-source-email-title' : 'transaction-detail-title'
@@ -162,7 +182,10 @@ export default function TransactionDetailDialog({
               <DetailLine label="Transaction ID" value={tx.txn_id} />
               <DetailLine label="Mail ID" value={tx.mail_id} />
               <Divider sx={{ my: 1 }} />
-              <DetailLine label="Merchant" value={tx.merchant} />
+              <DetailLine
+                label="Counterparty"
+                value={tx.counterparty_name ?? tx.merchant}
+              />
               <DetailLine label="Category" value={tx.category} />
               <DetailLine label="Account" value={row.account} />
               <DetailLine label="Account ID" value={tx.account_id} />
@@ -182,9 +205,7 @@ export default function TransactionDetailDialog({
               aria-labelledby="detail-source-email-title"
             >
               <Stack spacing={1}>
-                {tx.mail_id && (
-                  <DetailLine label="Email ID" value={tx.mail_id} />
-                )}
+                {tx.mail_id && <DetailLine label="Email ID" value={tx.mail_id} />}
                 {mailState.status === 'loading' && (
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
                     <CircularProgress size={32} aria-label="Loading email" />
@@ -224,10 +245,10 @@ export default function TransactionDetailDialog({
                         <DetailLine
                           label="Classification"
                           value={
-                            enrichment.classification_id ? (
+                            enrichment.classification_id && classificationLinkTo ? (
                               <Link
                                 component={RouterLink}
-                                to={`/settings/rules/classifications/${enrichment.classification_id}?tab=classifications`}
+                                to={classificationLinkTo}
                                 underline="hover"
                               >
                                 {enrichment.classification_name ??
@@ -244,10 +265,10 @@ export default function TransactionDetailDialog({
                         <DetailLine
                           label="Parser"
                           value={
-                            enrichment.parser_id ? (
+                            enrichment.parser_id && parserLinkTo ? (
                               <Link
                                 component={RouterLink}
-                                to={`/settings/rules/parsers/${enrichment.parser_id}?tab=parsers`}
+                                to={parserLinkTo}
                                 underline="hover"
                               >
                                 {enrichment.parser_name ?? String(enrichment.parser_id)}
@@ -270,7 +291,49 @@ export default function TransactionDetailDialog({
                         No enrichment row for this email.
                       </Typography>
                     )}
+                    {tx.mail_id && (
+                      <Box
+                        sx={{
+                          pt: 2,
+                          pb: 0.5,
+                          display: 'flex',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={reprocessState.status === 'loading'}
+                          onClick={() => setConfirmReprocessOpen(true)}
+                        >
+                          {reprocessState.status === 'loading'
+                            ? 'Reprocessing…'
+                            : 'Reprocess Email'}
+                        </Button>
+                      </Box>
+                    )}
                   </>
+                )}
+
+                {mailState.status === 'error' && tx.mail_id && (
+                  <Box
+                    sx={{
+                      pt: 2,
+                      display: 'flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={reprocessState.status === 'loading'}
+                      onClick={() => setConfirmReprocessOpen(true)}
+                    >
+                      {reprocessState.status === 'loading'
+                        ? 'Reprocessing…'
+                        : 'Reprocess Email'}
+                    </Button>
+                  </Box>
                 )}
               </Stack>
             </Box>
@@ -309,6 +372,52 @@ export default function TransactionDetailDialog({
           Close
         </Button>
       </DialogActions>
+
+      <Dialog
+        open={confirmReprocessOpen}
+        onClose={() => setConfirmReprocessOpen(false)}
+        maxWidth="sm"
+      >
+        <DialogTitle>Reprocess this email?</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary">
+            Reprocessing can change the derived transaction and may result in this
+            transaction being removed or getting a new ID. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            size="small"
+            onClick={() => setConfirmReprocessOpen(false)}
+            disabled={reprocessState.status === 'loading'}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            color="warning"
+            disabled={reprocessState.status === 'loading'}
+            onClick={async () => {
+              if (!tx?.mail_id) return
+              setReprocessState({ status: 'loading' })
+              try {
+                await reprocessEmailByMailId(tx.mail_id)
+                onNotify?.('Reprocess started for this email.')
+                setConfirmReprocessOpen(false)
+                onClose?.()
+              } catch (e) {
+                onNotify?.(apiErrorMessage(e))
+                setConfirmReprocessOpen(false)
+              } finally {
+                setReprocessState({ status: 'idle' })
+              }
+            }}
+          >
+            Reprocess
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   )
 }

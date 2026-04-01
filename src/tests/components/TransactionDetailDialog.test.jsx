@@ -10,10 +10,17 @@ vi.mock('../../services/financeApi', async (importOriginal) => {
   return {
     ...actual,
     getFetchedEmailByMailId: vi.fn(),
+    reprocessEmailByMailId: vi.fn(),
   }
 })
 
-import { getFetchedEmailByMailId } from '../../services/financeApi'
+import { getFetchedEmailByMailId, reprocessEmailByMailId } from '../../services/financeApi'
+
+function renderWithRouter(ui, { initialEntries = ['/'] } = {}) {
+  return renderWithTheme(
+    <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>,
+  )
+}
 
 function makeRow(overrides = {}) {
   const raw = {
@@ -61,14 +68,14 @@ describe('TransactionDetailDialog', () => {
   })
 
   it('shows empty state when no transaction', () => {
-    renderWithTheme(
+    renderWithRouter(
       <TransactionDetailDialog open onClose={vi.fn()} row={null} />,
     )
     expect(screen.getByText('No transaction selected.')).toBeInTheDocument()
   })
 
   it('renders transaction fields and tab labels', () => {
-    renderWithTheme(
+    renderWithRouter(
       <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
     )
 
@@ -87,7 +94,7 @@ describe('TransactionDetailDialog', () => {
   it('disables Source Email when mail_id is missing', () => {
     const row = makeRow()
     row.raw = { ...row.raw, mail_id: null }
-    renderWithTheme(
+    renderWithRouter(
       <TransactionDetailDialog open onClose={vi.fn()} row={row} />,
     )
     expect(
@@ -97,7 +104,7 @@ describe('TransactionDetailDialog', () => {
 
   it('loads email tab and shows subject and body after fetch', async () => {
     const user = userEvent.setup()
-    renderWithTheme(
+    renderWithRouter(
       <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
     )
 
@@ -112,11 +119,46 @@ describe('TransactionDetailDialog', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'Source Email' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Reprocess Email/i }),
+    ).toBeInTheDocument()
     expect(screen.getByText(/Line one/)).toBeInTheDocument()
     expect(screen.getByText(/Line two/)).toBeInTheDocument()
     expect(
       screen.getByText('No enrichment row for this email.'),
     ).toBeInTheDocument()
+  })
+
+  it('calls reprocess for the current mail_id', async () => {
+    const user = userEvent.setup()
+    vi.mocked(reprocessEmailByMailId).mockResolvedValue({})
+    const onClose = vi.fn()
+    const onNotify = vi.fn()
+
+    renderWithRouter(
+      <TransactionDetailDialog
+        open
+        onClose={onClose}
+        onNotify={onNotify}
+        row={makeRow()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+
+    await user.click(await screen.findByRole('button', { name: /Reprocess Email/i }))
+
+    expect(
+      await screen.findByRole('heading', { name: /Reprocess this email\?/i }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Reprocess$/i }))
+
+    await waitFor(() => {
+      expect(vi.mocked(reprocessEmailByMailId)).toHaveBeenCalledWith('gmail-msg-abc')
+    })
+    expect(onNotify).toHaveBeenCalledWith('Reprocess started for this email.')
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('shows enrichment fields when API returns enrichment', async () => {
@@ -139,10 +181,10 @@ describe('TransactionDetailDialog', () => {
     })
 
     const user = userEvent.setup()
-    renderWithTheme(
-      <MemoryRouter>
-        <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />
-      </MemoryRouter>,
+    const fromPath = '/transactions/99?tab=email&page=0&ps=25'
+    renderWithRouter(
+      <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
+      { initialEntries: [fromPath] },
     )
 
     await user.click(screen.getByRole('button', { name: 'Source Email' }))
@@ -151,19 +193,22 @@ describe('TransactionDetailDialog', () => {
       expect(screen.getByText('transaction')).toBeInTheDocument()
     })
     expect(screen.getByText('default')).toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'transaction' }),
-    ).toHaveAttribute('href', '/settings/rules/classifications/12?tab=classifications')
+    const expectedTo = `/settings/rules/classifications/12?tab=classifications&returnTo=${encodeURIComponent(fromPath)}`
+    expect(screen.getByRole('link', { name: 'transaction' })).toHaveAttribute(
+      'href',
+      expectedTo,
+    )
+    const expectedParserTo = `/settings/rules/parsers/34?tab=parsers&returnTo=${encodeURIComponent(fromPath)}`
     expect(screen.getByRole('link', { name: 'default' })).toHaveAttribute(
       'href',
-      '/settings/rules/parsers/34?tab=parsers',
+      expectedParserTo,
     )
   })
 
   it('calls onClose when Close is clicked', async () => {
     const onClose = vi.fn()
     const user = userEvent.setup()
-    renderWithTheme(
+    renderWithRouter(
       <TransactionDetailDialog open onClose={onClose} row={makeRow()} />,
     )
 

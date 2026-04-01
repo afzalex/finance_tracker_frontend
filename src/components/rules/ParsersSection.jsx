@@ -24,6 +24,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AccountType as ApiAccountType,
   Status as ApiStatus,
@@ -39,6 +40,7 @@ import {
   patchParser,
 } from '../../services/rulesApi'
 import { formatDateTime } from '../../utils/format'
+import { leaveReturnCopy, parseSafeReturnToParam } from '../../utils/safeReturnTo'
 
 function nullableString(v) {
   const s = String(v ?? '').trim()
@@ -59,6 +61,12 @@ export default function ParsersSection({
   onOpenRule,
   onCloseRule,
 }) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const safeReturnPath = useMemo(
+    () => parseSafeReturnToParam(searchParams.get('returnTo')),
+    [searchParams],
+  )
   const [refreshKey, setRefreshKey] = useState(0)
   const [mutationError, setMutationError] = useState(null)
   const [errorSnack, setErrorSnack] = useState({ open: false, message: '' })
@@ -130,10 +138,56 @@ export default function ParsersSection({
 
   const [form, setForm] = useState(emptyForm)
 
-  const closeDialog = () => {
+  const performCloseDialog = () => {
     const wasEdit = dialog.mode === 'edit'
     setDialog({ open: false, mode: 'create', rule: null })
     if (wasEdit) onCloseRule?.()
+  }
+
+  const [leaveReturnDialog, setLeaveReturnDialog] = useState({
+    open: false,
+    path: null,
+    variant: null,
+    staySnack: null,
+  })
+
+  const handleLeaveReturnStay = () => {
+    const variant = leaveReturnDialog.variant
+    const snack = leaveReturnDialog.staySnack
+    setLeaveReturnDialog({
+      open: false,
+      path: null,
+      variant: null,
+      staySnack: null,
+    })
+    if (variant === 'dismiss') performCloseDialog()
+    if (snack) setSnack({ open: true, message: snack })
+  }
+
+  const handleLeaveReturnContinue = () => {
+    const path = leaveReturnDialog.path
+    const variant = leaveReturnDialog.variant
+    setLeaveReturnDialog({
+      open: false,
+      path: null,
+      variant: null,
+      staySnack: null,
+    })
+    if (variant === 'dismiss') performCloseDialog()
+    if (path) navigate(path)
+  }
+
+  const requestDismissParserDialog = () => {
+    if (!safeReturnPath) {
+      performCloseDialog()
+      return
+    }
+    setLeaveReturnDialog({
+      open: true,
+      path: safeReturnPath,
+      variant: 'dismiss',
+      staySnack: null,
+    })
   }
 
   const openCreate = () => {
@@ -272,12 +326,19 @@ export default function ParsersSection({
       } else {
         await patchParser(dialog.rule.id, payload)
       }
-      closeDialog()
+      const successMessage = dialog.mode === 'create' ? 'Created.' : 'Updated.'
+      performCloseDialog()
       setRefreshKey((x) => x + 1)
-      setSnack({
-        open: true,
-        message: dialog.mode === 'create' ? 'Created.' : 'Updated.',
-      })
+      if (safeReturnPath) {
+        setLeaveReturnDialog({
+          open: true,
+          path: safeReturnPath,
+          variant: 'afterSave',
+          staySnack: successMessage,
+        })
+      } else {
+        setSnack({ open: true, message: successMessage })
+      }
     } catch (e) {
       const msg = e?.message ?? 'Request failed'
       setMutationError(msg)
@@ -296,12 +357,22 @@ export default function ParsersSection({
     try {
       await deactivateParser(deactivateState.rule.id)
       closeDeactivate()
-      if (deactivateFromEdit) {
+      const fromEdit = deactivateFromEdit
+      if (fromEdit) {
         setDeactivateFromEdit(false)
-        closeDialog()
+        performCloseDialog()
       }
       setRefreshKey((x) => x + 1)
-      setSnack({ open: true, message: 'Deactivated.' })
+      if (fromEdit && safeReturnPath) {
+        setLeaveReturnDialog({
+          open: true,
+          path: safeReturnPath,
+          variant: 'afterDeactivate',
+          staySnack: 'Deactivated.',
+        })
+      } else {
+        setSnack({ open: true, message: 'Deactivated.' })
+      }
     } catch (e) {
       const msg = e?.message ?? 'Request failed'
       setMutationError(msg)
@@ -432,7 +503,7 @@ export default function ParsersSection({
 
       <Dialog
         open={dialog.open}
-        onClose={closeDialog}
+        onClose={() => requestDismissParserDialog()}
         fullWidth
         maxWidth="md"
         PaperProps={{ sx: { position: 'relative', overflow: 'visible' } }}
@@ -717,7 +788,11 @@ export default function ParsersSection({
         </DialogContent>
 
         <DialogActions sx={{ gap: 1 }}>
-          <Button size="small" onClick={closeDialog} disabled={saving}>
+          <Button
+            size="small"
+            onClick={requestDismissParserDialog}
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button size="small" variant="contained" onClick={submit} disabled={saving}>
@@ -747,6 +822,41 @@ export default function ParsersSection({
             {errorSnack.message}
           </Alert>
         </Snackbar>
+      </Dialog>
+
+      <Dialog
+        open={leaveReturnDialog.open}
+        onClose={handleLeaveReturnStay}
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {leaveReturnDialog.path && leaveReturnDialog.variant
+            ? leaveReturnCopy(
+                leaveReturnDialog.path,
+                leaveReturnDialog.variant,
+                { entity: 'parser' },
+              ).title
+            : ''}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary">
+            {leaveReturnDialog.path && leaveReturnDialog.variant
+              ? leaveReturnCopy(
+                  leaveReturnDialog.path,
+                  leaveReturnDialog.variant,
+                  { entity: 'parser' },
+                ).body
+              : ''}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={handleLeaveReturnStay}>
+            Stay here
+          </Button>
+          <Button size="small" variant="contained" onClick={handleLeaveReturnContinue}>
+            Continue
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm">

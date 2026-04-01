@@ -30,6 +30,29 @@ export async function getFetchedEmailByMailId(mailId) {
   return res.data
 }
 
+/**
+ * Re-run classification + parsing for all cached emails (offline).
+ * POST /api/v1/emails/reprocess
+ */
+export async function reprocessAllEmailsOffline() {
+  const res = await emailsApi.reprocessAllEmailsOfflineApiV1EmailsReprocessPost()
+  return res.data
+}
+
+/**
+ * Re-run classification + parsing for one cached email (offline).
+ * POST /api/v1/emails/{mail_id}/reprocess
+ */
+export async function reprocessEmailByMailId(mailId) {
+  const raw = String(mailId ?? '').trim()
+  if (!raw) throw new Error('Missing mail id')
+
+  const res = await emailsApi.reprocessEmailByMailIdApiV1EmailsMailIdReprocessPost(
+    raw,
+  )
+  return res.data
+}
+
 function signedAmountFromTx(tx) {
   const n = tx.amount_parsed ?? 0
   return tx.direction === 'CREDIT' ? n : -n
@@ -41,11 +64,10 @@ function mapTransactionRow(tx) {
     [aid, tx.account_type].filter(Boolean).join(' · ') || '—'
   const typeParts = [tx.transaction_type, tx.sub_type].filter(Boolean)
   return {
+    ...tx,
     id: String(tx.id),
     date: tx.transacted_at,
-    merchant: tx.merchant ?? '—',
     description: typeParts.length ? typeParts.join(' · ') : '—',
-    provider: tx.provider ?? '—',
     account: accountLabel,
     amount: signedAmountFromTx(tx),
     amountRaw:

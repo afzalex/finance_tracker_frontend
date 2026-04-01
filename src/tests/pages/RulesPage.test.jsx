@@ -22,8 +22,13 @@ import {
   listClassifications,
   listParsers,
   patchClassification,
+  patchParser,
 } from '../../services/rulesApi'
 import { createParser } from '../../services/rulesApi'
+
+function TxReturnStub() {
+  return <div>Back on transactions</div>
+}
 
 describe('RulesPage', () => {
   it('renders classifications by default and switches to parsers', async () => {
@@ -213,6 +218,126 @@ describe('RulesPage', () => {
       expect(vi.mocked(deactivateClassification)).toHaveBeenCalledWith(1)
     })
     expect(vi.mocked(patchClassification)).not.toHaveBeenCalled()
+  })
+
+  it('after classification save with returnTo, confirm redirects to that path', async () => {
+    vi.mocked(listClassifications).mockResolvedValue([
+      {
+        id: 1,
+        name: 'Rule 1',
+        message_type: 'TRANSACTION_ALERT',
+        priority: 10,
+        is_active: true,
+        updated_at: '2026-01-01T00:00:00Z',
+        subject_match_regex: null,
+        subject_extract_regex: null,
+        sender_match_regex: null,
+        body_match_regex: null,
+        body_extract_regex: null,
+        snippet_extract_regex: null,
+      },
+    ])
+    vi.mocked(listParsers).mockResolvedValue([])
+    vi.mocked(patchClassification).mockResolvedValue({ id: 1 })
+
+    const returnPath = '/transactions/99?tab=email&page=0&ps=25'
+    const entry = `/settings/rules/classifications/1?tab=classifications&returnTo=${encodeURIComponent(returnPath)}`
+
+    renderWithTheme(
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/settings/rules" element={<RulesPage />} />
+          <Route
+            path="/settings/rules/classifications/:classificationId"
+            element={<RulesPage />}
+          />
+          <Route path="/transactions/:transactionId" element={<TxReturnStub />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const user = userEvent.setup()
+    expect(
+      await screen.findByRole('heading', { name: /Edit classification/i }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(patchClassification)).toHaveBeenCalled()
+    })
+
+    expect(
+      await screen.findByRole('heading', { name: /Return to Transaction Details\?/i }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Back on transactions')).toBeInTheDocument()
+    })
+  })
+
+  it('after parser save with returnTo, confirm redirects to that path', async () => {
+    vi.mocked(listClassifications).mockResolvedValue([])
+    vi.mocked(listParsers).mockResolvedValue([
+      {
+        id: 1,
+        label: 'L1',
+        name: 'Parser 1',
+        priority: 5,
+        is_active: true,
+        updated_at: '2026-01-01T00:00:00Z',
+        transaction_type: null,
+        sub_type: null,
+        status: null,
+        account_type: null,
+        provider: null,
+        subject_match_regex: null,
+        subject_extract_regex: null,
+        sender_match_regex: null,
+        body_match_regex: null,
+        body_extract_regex: null,
+        snippet_extract_regex: null,
+        txn_date_fmt: null,
+        txn_time_fmt: null,
+      },
+    ])
+    vi.mocked(patchParser).mockResolvedValue({ id: 1 })
+
+    const returnPath = '/transactions/88?tab=email&page=0&ps=25'
+    const entry = `/settings/rules/parsers/1?tab=parsers&returnTo=${encodeURIComponent(returnPath)}`
+
+    renderWithTheme(
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/settings/rules" element={<RulesPage />} />
+          <Route path="/settings/rules/parsers/:parserId" element={<RulesPage />} />
+          <Route path="/transactions/:transactionId" element={<TxReturnStub />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    const user = userEvent.setup()
+    expect(
+      await screen.findByRole('heading', { name: /Edit parser/i }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(patchParser)).toHaveBeenCalled()
+    })
+
+    expect(
+      await screen.findByRole('heading', { name: /Return to Transaction Details\?/i }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Back on transactions')).toBeInTheDocument()
+    })
   })
 })
 

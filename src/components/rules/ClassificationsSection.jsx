@@ -24,6 +24,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MessageType as ApiMessageType } from '../../api'
 import useResource from '../../hooks/useResource'
 import LoadingBlock from '../LoadingBlock'
@@ -34,6 +35,7 @@ import {
   patchClassification,
 } from '../../services/rulesApi'
 import { formatDateTime } from '../../utils/format'
+import { leaveReturnCopy, parseSafeReturnToParam } from '../../utils/safeReturnTo'
 
 function nullableString(v) {
   const s = String(v ?? '').trim()
@@ -54,6 +56,12 @@ export default function ClassificationsSection({
   onOpenRule,
   onCloseRule,
 }) {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const safeReturnPath = useMemo(
+    () => parseSafeReturnToParam(searchParams.get('returnTo')),
+    [searchParams],
+  )
   const [refreshKey, setRefreshKey] = useState(0)
   const [mutationError, setMutationError] = useState(null)
   const [errorSnack, setErrorSnack] = useState({ open: false, message: '' })
@@ -119,10 +127,56 @@ export default function ClassificationsSection({
 
   const [form, setForm] = useState(emptyForm)
 
-  const closeDialog = () => {
+  const performCloseDialog = () => {
     const wasEdit = dialog.mode === 'edit'
     setDialog({ open: false, mode: 'create', rule: null })
     if (wasEdit) onCloseRule?.()
+  }
+
+  const [leaveReturnDialog, setLeaveReturnDialog] = useState({
+    open: false,
+    path: null,
+    variant: null,
+    staySnack: null,
+  })
+
+  const handleLeaveReturnStay = () => {
+    const variant = leaveReturnDialog.variant
+    const snack = leaveReturnDialog.staySnack
+    setLeaveReturnDialog({
+      open: false,
+      path: null,
+      variant: null,
+      staySnack: null,
+    })
+    if (variant === 'dismiss') performCloseDialog()
+    if (snack) setSnack({ open: true, message: snack })
+  }
+
+  const handleLeaveReturnContinue = () => {
+    const path = leaveReturnDialog.path
+    const variant = leaveReturnDialog.variant
+    setLeaveReturnDialog({
+      open: false,
+      path: null,
+      variant: null,
+      staySnack: null,
+    })
+    if (variant === 'dismiss') performCloseDialog()
+    if (path) navigate(path)
+  }
+
+  const requestDismissClassificationDialog = () => {
+    if (!safeReturnPath) {
+      performCloseDialog()
+      return
+    }
+    setLeaveReturnDialog({
+      open: true,
+      path: safeReturnPath,
+      variant: 'dismiss',
+      staySnack: null,
+    })
   }
 
   const openCreate = () => {
@@ -243,14 +297,24 @@ export default function ClassificationsSection({
 
     try {
       const payload = buildClassificationPayload()
+      const successMessage = dialog.mode === 'create' ? 'Created.' : 'Updated.'
       if (dialog.mode === 'create') {
         await createClassification(payload)
       } else {
         await patchClassification(dialog.rule.id, payload)
       }
-      closeDialog()
+      performCloseDialog()
       setRefreshKey((x) => x + 1)
-      setSnack({ open: true, message: dialog.mode === 'create' ? 'Created.' : 'Updated.' })
+      if (safeReturnPath) {
+        setLeaveReturnDialog({
+          open: true,
+          path: safeReturnPath,
+          variant: 'afterSave',
+          staySnack: successMessage,
+        })
+      } else {
+        setSnack({ open: true, message: successMessage })
+      }
     } catch (e) {
       const msg = e?.message ?? 'Request failed'
       setMutationError(msg)
@@ -269,12 +333,22 @@ export default function ClassificationsSection({
     try {
       await deactivateClassification(deactivateState.rule.id)
       closeDeactivate()
-      if (deactivateFromEdit) {
+      const fromEdit = deactivateFromEdit
+      if (fromEdit) {
         setDeactivateFromEdit(false)
-        closeDialog()
+        performCloseDialog()
       }
       setRefreshKey((x) => x + 1)
-      setSnack({ open: true, message: 'Deactivated.' })
+      if (fromEdit && safeReturnPath) {
+        setLeaveReturnDialog({
+          open: true,
+          path: safeReturnPath,
+          variant: 'afterDeactivate',
+          staySnack: 'Deactivated.',
+        })
+      } else {
+        setSnack({ open: true, message: 'Deactivated.' })
+      }
     } catch (e) {
       const msg = e?.message ?? 'Request failed'
       setMutationError(msg)
@@ -392,7 +466,7 @@ export default function ClassificationsSection({
 
       <Dialog
         open={dialog.open}
-        onClose={closeDialog}
+        onClose={() => requestDismissClassificationDialog()}
         fullWidth
         maxWidth="md"
         PaperProps={{ sx: { position: 'relative', overflow: 'visible' } }}
@@ -573,7 +647,11 @@ export default function ClassificationsSection({
         </DialogContent>
 
         <DialogActions sx={{ gap: 1 }}>
-          <Button size="small" onClick={closeDialog} disabled={saving}>
+          <Button
+            size="small"
+            onClick={requestDismissClassificationDialog}
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button size="small" variant="contained" onClick={submit} disabled={saving}>
@@ -603,6 +681,33 @@ export default function ClassificationsSection({
             {errorSnack.message}
           </Alert>
         </Snackbar>
+      </Dialog>
+
+      <Dialog
+        open={leaveReturnDialog.open}
+        onClose={handleLeaveReturnStay}
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {leaveReturnDialog.path && leaveReturnDialog.variant
+            ? leaveReturnCopy(leaveReturnDialog.path, leaveReturnDialog.variant).title
+            : ''}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary">
+            {leaveReturnDialog.path && leaveReturnDialog.variant
+              ? leaveReturnCopy(leaveReturnDialog.path, leaveReturnDialog.variant).body
+              : ''}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={handleLeaveReturnStay}>
+            Stay here
+          </Button>
+          <Button size="small" variant="contained" onClick={handleLeaveReturnContinue}>
+            Continue
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm">

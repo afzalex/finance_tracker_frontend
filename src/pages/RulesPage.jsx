@@ -66,40 +66,45 @@ export default function RulesPage() {
   const setTabAndUrl = (nextTab) => {
     setTab(nextTab)
     const next = nextTab === 1 ? 'parsers' : 'classifications'
-    setSearchParams((prev) => {
-      const sp = new URLSearchParams(prev)
-      sp.set('tab', next)
-      return sp
-    })
     if (routeClassificationId != null || routeParserId != null) {
-      navigate(`/settings/rules?tab=${next}`)
+      const sp = new URLSearchParams(searchParams)
+      sp.set('tab', next)
+      navigate(`/settings/rules?${sp.toString()}`)
+    } else {
+      setSearchParams((prev) => {
+        const sp = new URLSearchParams(prev)
+        sp.set('tab', next)
+        return sp
+      })
     }
   }
 
   const openClassificationById = (id) => {
-    setSearchParams((prev) => {
-      const sp = new URLSearchParams(prev)
-      sp.set('tab', 'classifications')
-      return sp
-    })
-    navigate(`/settings/rules/classifications/${id}?tab=classifications`)
+    const sp = new URLSearchParams(searchParams)
+    sp.set('tab', 'classifications')
+    navigate(`/settings/rules/classifications/${id}?${sp.toString()}`)
   }
 
   const closeClassificationRoute = () => {
-    navigate('/settings/rules?tab=classifications')
+    const sp = new URLSearchParams()
+    sp.set('tab', 'classifications')
+    const ret = searchParams.get('returnTo')
+    if (ret) sp.set('returnTo', ret)
+    navigate(`/settings/rules?${sp.toString()}`)
   }
 
   const openParserById = (id) => {
-    setSearchParams((prev) => {
-      const sp = new URLSearchParams(prev)
-      sp.set('tab', 'parsers')
-      return sp
-    })
-    navigate(`/settings/rules/parsers/${id}?tab=parsers`)
+    const sp = new URLSearchParams(searchParams)
+    sp.set('tab', 'parsers')
+    navigate(`/settings/rules/parsers/${id}?${sp.toString()}`)
   }
 
   const closeParserRoute = () => {
-    navigate('/settings/rules?tab=parsers')
+    const sp = new URLSearchParams()
+    sp.set('tab', 'parsers')
+    const ret = searchParams.get('returnTo')
+    if (ret) sp.set('returnTo', ret)
+    navigate(`/settings/rules?${sp.toString()}`)
   }
 
   return (

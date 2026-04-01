@@ -5,6 +5,8 @@ import {
   Card,
   CardContent,
   Divider,
+  Portal,
+  Snackbar,
   Stack,
   Table,
   TableBody,
@@ -42,6 +44,11 @@ const clipCellSx = {
   maxWidth: 0,
 }
 
+function displayCounterparty(row) {
+  const v = row?.counterparty_name ?? row?.merchant
+  return v != null && String(v).trim() !== '' ? String(v) : '—'
+}
+
 export default function Transactions() {
   const navigate = useNavigate()
   const params = useParams()
@@ -61,6 +68,7 @@ export default function Transactions() {
   })
   const [selectedRow, setSelectedRow] = useState(null)
   const suppressRouteOpenRef = useRef(false)
+  const [snack, setSnack] = useState({ open: false, message: '' })
 
   const resourceKey = `transactions:${query}:${page}:${rowsPerPage}`
   const { status, data, error } = useResource(resourceKey, () =>
@@ -222,7 +230,7 @@ export default function Transactions() {
                     <TableCell sx={clipCellSx}>Date</TableCell>
                     <TableCell sx={clipCellSx}>Description</TableCell>
                     <TableCell sx={clipCellSx}>Account</TableCell>
-                    <TableCell sx={clipCellSx}>Merchant</TableCell>
+                    <TableCell sx={clipCellSx}>Counterparty</TableCell>
                     <TableCell sx={clipCellSx}>Provider</TableCell>
                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       Amount
@@ -232,6 +240,7 @@ export default function Transactions() {
                 <TableBody>
                   {rows.map((t) => {
                     const when = formatDateTime(t.date)
+                    const counterpartyLabel = displayCounterparty(t)
                     return (
                       <TableRow
                         key={t.id}
@@ -257,8 +266,8 @@ export default function Transactions() {
                       <TableCell sx={clipCellSx} title={t.account}>
                         {t.account}
                       </TableCell>
-                      <TableCell sx={clipCellSx} title={t.merchant}>
-                        {t.merchant}
+                      <TableCell sx={clipCellSx} title={counterpartyLabel}>
+                        {counterpartyLabel}
                       </TableCell>
                       <TableCell sx={clipCellSx} title={t.provider}>
                         {t.provider}
@@ -311,7 +320,25 @@ export default function Transactions() {
           if (!selectedRow) return
           openDetail(selectedRow, t)
         }}
+        onNotify={(message) => setSnack({ open: true, message })}
       />
+
+      <Portal>
+        <Snackbar
+          open={snack.open}
+          autoHideDuration={3000}
+          onClose={() => setSnack({ open: false, message: '' })}
+          message={snack.message}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          sx={{
+            position: 'fixed',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bottom: 16,
+            zIndex: (theme) => theme.zIndex.snackbar,
+          }}
+        />
+      </Portal>
     </Stack>
   )
 }
