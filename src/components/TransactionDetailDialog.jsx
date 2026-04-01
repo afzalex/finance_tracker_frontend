@@ -1,24 +1,16 @@
 import { isValidElement, useEffect, useState } from 'react'
-import { Link as RouterLink, useLocation } from 'react-router-dom'
 import {
-  Alert,
   Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  Link,
   Stack,
   Typography,
 } from '@mui/material'
-import {
-  apiErrorMessage,
-  getFetchedEmailByMailId,
-  reprocessEmailByMailId,
-} from '../services/financeApi'
+import EmailSourcePanel from './EmailSourcePanel'
 import { formatDateTime, formatMoney } from '../utils/format'
 
 function DetailLine({ label, value }) {
@@ -86,60 +78,12 @@ export default function TransactionDetailDialog({
     : 0
 
   const [detailTab, setDetailTab] = useState(initialTab ?? 'transaction')
-  const [mailState, setMailState] = useState({
-    status: 'idle',
-    data: null,
-    error: null,
-  })
-  const [reprocessState, setReprocessState] = useState({ status: 'idle' })
-  const [confirmReprocessOpen, setConfirmReprocessOpen] = useState(false)
-
-  const location = useLocation()
-
-  useEffect(() => {
-    if (!open || detailTab !== 'email' || !tx?.mail_id) return
-    let cancelled = false
-    const mid = tx.mail_id
-    setReprocessState({ status: 'idle' })
-    queueMicrotask(() => {
-      if (!cancelled) setMailState({ status: 'loading', data: null, error: null })
-    })
-    getFetchedEmailByMailId(mid)
-      .then((data) => {
-        if (!cancelled) setMailState({ status: 'success', data, error: null })
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setMailState({
-            status: 'error',
-            data: null,
-            error: apiErrorMessage(err),
-          })
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, detailTab, tx?.mail_id])
 
   useEffect(() => {
     if (!open) return
     if (!initialTab) return
     setDetailTab(initialTab)
   }, [open, initialTab])
-
-  const mail = mailState.data
-  const enrichment = mail?.enrichment
-
-  const classificationLinkTo =
-    enrichment?.classification_id != null
-      ? `/settings/rules/classifications/${enrichment.classification_id}?tab=classifications&returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`
-      : null
-
-  const parserLinkTo =
-    enrichment?.parser_id != null
-      ? `/settings/rules/parsers/${enrichment.parser_id}?tab=parsers&returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`
-      : null
 
   const titleId =
     detailTab === 'email' ? 'detail-source-email-title' : 'transaction-detail-title'
@@ -204,138 +148,12 @@ export default function TransactionDetailDialog({
               aria-hidden={detailTab !== 'email'}
               aria-labelledby="detail-source-email-title"
             >
-              <Stack spacing={1}>
-                {tx.mail_id && <DetailLine label="Email ID" value={tx.mail_id} />}
-                {mailState.status === 'loading' && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                    <CircularProgress size={32} aria-label="Loading email" />
-                  </Box>
-                )}
-                {mailState.status === 'error' && (
-                  <Alert severity="warning">{mailState.error}</Alert>
-                )}
-                {mailState.status === 'success' && mail && (
-                  <>
-                    <DetailLine label="Subject" value={mail.subject} />
-                    <DetailLine label="Sender" value={mail.sender} />
-                    <DetailLine label="Snippet" value={mail.snippet} />
-                    <DetailLine
-                      label="Internal date"
-                      value={
-                        mail.internal_date_ms != null
-                          ? formatDateTime(new Date(mail.internal_date_ms).toISOString())
-                          : '—'
-                      }
-                    />
-                    <DetailLine label="Stored at" value={formatDateTime(mail.created_at)} />
-                    <Box
-                      component="section"
-                      sx={{
-                        pt: 0.5,
-                        pb: 1.5,
-                      }}
-                    >
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        Body
-                      </Typography>
-                      <MailBodyBlock text={mail.body_text} />
-                    </Box>
-                    {enrichment ? (
-                      <Box component="section">
-                        <DetailLine
-                          label="Classification"
-                          value={
-                            enrichment.classification_id && classificationLinkTo ? (
-                              <Link
-                                component={RouterLink}
-                                to={classificationLinkTo}
-                                underline="hover"
-                              >
-                                {enrichment.classification_name ??
-                                  enrichment.classification ??
-                                  String(enrichment.classification_id)}
-                              </Link>
-                            ) : (
-                              enrichment.classification_name ??
-                              enrichment.classification ??
-                              '—'
-                            )
-                          }
-                        />
-                        <DetailLine
-                          label="Parser"
-                          value={
-                            enrichment.parser_id && parserLinkTo ? (
-                              <Link
-                                component={RouterLink}
-                                to={parserLinkTo}
-                                underline="hover"
-                              >
-                                {enrichment.parser_name ?? String(enrichment.parser_id)}
-                              </Link>
-                            ) : (
-                              enrichment.parser_name ?? '—'
-                            )
-                          }
-                        />
-                        <DetailLine
-                          label="Enrichment updated"
-                          value={formatDateTime(enrichment.updated_at)}
-                        />
-                      </Box>
-                    ) : (
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                      >
-                        No enrichment row for this email.
-                      </Typography>
-                    )}
-                    {tx.mail_id && (
-                      <Box
-                        sx={{
-                          pt: 2,
-                          pb: 0.5,
-                          display: 'flex',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={reprocessState.status === 'loading'}
-                          onClick={() => setConfirmReprocessOpen(true)}
-                        >
-                          {reprocessState.status === 'loading'
-                            ? 'Reprocessing…'
-                            : 'Reprocess Email'}
-                        </Button>
-                      </Box>
-                    )}
-                  </>
-                )}
-
-                {mailState.status === 'error' && tx.mail_id && (
-                  <Box
-                    sx={{
-                      pt: 2,
-                      display: 'flex',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled={reprocessState.status === 'loading'}
-                      onClick={() => setConfirmReprocessOpen(true)}
-                    >
-                      {reprocessState.status === 'loading'
-                        ? 'Reprocessing…'
-                        : 'Reprocess Email'}
-                    </Button>
-                  </Box>
-                )}
-              </Stack>
+              <EmailSourcePanel
+                mailId={tx.mail_id}
+                active={open && detailTab === 'email'}
+                onNotify={onNotify}
+                onReprocessSuccess={() => onClose?.()}
+              />
             </Box>
           </Box>
         )}
@@ -347,6 +165,10 @@ export default function TransactionDetailDialog({
         )}
       </DialogContent>
       <DialogActions sx={{ gap: 1, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+        <Button onClick={onClose} variant="outlined">
+          Close
+        </Button>
+        <Box sx={{ flexGrow: 1 }} />
         <Button
           variant={detailTab === 'transaction' ? 'contained' : 'outlined'}
           onClick={() => {
@@ -367,57 +189,8 @@ export default function TransactionDetailDialog({
         >
           Source Email
         </Button>
-        <Box sx={{ flexGrow: 1 }} />
-        <Button onClick={onClose} variant="contained">
-          Close
-        </Button>
       </DialogActions>
 
-      <Dialog
-        open={confirmReprocessOpen}
-        onClose={() => setConfirmReprocessOpen(false)}
-        maxWidth="sm"
-      >
-        <DialogTitle>Reprocess this email?</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary">
-            Reprocessing can change the derived transaction and may result in this
-            transaction being removed or getting a new ID. Continue?
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            size="small"
-            onClick={() => setConfirmReprocessOpen(false)}
-            disabled={reprocessState.status === 'loading'}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            color="warning"
-            disabled={reprocessState.status === 'loading'}
-            onClick={async () => {
-              if (!tx?.mail_id) return
-              setReprocessState({ status: 'loading' })
-              try {
-                await reprocessEmailByMailId(tx.mail_id)
-                onNotify?.('Reprocess started for this email.')
-                setConfirmReprocessOpen(false)
-                onClose?.()
-              } catch (e) {
-                onNotify?.(apiErrorMessage(e))
-                setConfirmReprocessOpen(false)
-              } finally {
-                setReprocessState({ status: 'idle' })
-              }
-            }}
-          >
-            Reprocess
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Dialog>
   )
 }

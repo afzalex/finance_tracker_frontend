@@ -1,0 +1,294 @@
+import { isValidElement, useCallback, useEffect, useMemo, useState } from 'react'
+import { Link as RouterLink, useLocation } from 'react-router-dom'
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Link,
+  Stack,
+  Typography,
+} from '@mui/material'
+import ConfirmDialog from './ConfirmDialog'
+import {
+  apiErrorMessage,
+  getFetchedEmailByMailId,
+  reprocessEmailByMailId,
+} from '../services/financeApi'
+import { formatDateTime } from '../utils/format'
+
+function DetailLine({ label, value }) {
+  const display =
+    value === null || value === undefined || value === ''
+      ? '—'
+      : isValidElement(value)
+        ? value
+        : String(value)
+  return (
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={{ xs: 0, sm: 2 }}
+      sx={{ py: 0.75 }}
+    >
+      <Typography
+        component="span"
+        variant="body2"
+        color="text.secondary"
+        sx={{ minWidth: { sm: 160 }, flexShrink: 0 }}
+      >
+        {label}
+      </Typography>
+      <Typography component="span" variant="body2" sx={{ wordBreak: 'break-word' }}>
+        {display}
+      </Typography>
+    </Stack>
+  )
+}
+
+function MailBodyBlock({ text }) {
+  return (
+    <Box
+      component="pre"
+      sx={{
+        m: 0,
+        mt: 0.5,
+        p: 1.5,
+        bgcolor: 'action.hover',
+        borderRadius: 0.5,
+        fontSize: '0.8125rem',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      }}
+    >
+      {text && String(text).trim() !== '' ? text : '—'}
+    </Box>
+  )
+}
+
+export default function EmailSourcePanel({
+  mailId,
+  active,
+  onNotify,
+  onReprocessSuccess,
+  reprocessAlign = 'center',
+  showReprocessButton = true,
+  onBindOpenReprocessConfirm,
+}) {
+  const [mailState, setMailState] = useState({
+    status: 'idle',
+    data: null,
+    error: null,
+  })
+  const [reprocessState, setReprocessState] = useState({ status: 'idle' })
+  const [confirmReprocessOpen, setConfirmReprocessOpen] = useState(false)
+  const openReprocessConfirm = useCallback(
+    () => setConfirmReprocessOpen(true),
+    [],
+  )
+
+  const location = useLocation()
+  const returnTo = useMemo(
+    () => encodeURIComponent(`${location.pathname}${location.search}`),
+    [location.pathname, location.search],
+  )
+
+  useEffect(() => {
+    const raw = String(mailId ?? '').trim()
+    if (!active || !raw) return
+    let cancelled = false
+    setReprocessState({ status: 'idle' })
+    queueMicrotask(() => {
+      if (!cancelled) setMailState({ status: 'loading', data: null, error: null })
+    })
+    getFetchedEmailByMailId(raw)
+      .then((data) => {
+        if (!cancelled) setMailState({ status: 'success', data, error: null })
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setMailState({
+            status: 'error',
+            data: null,
+            error: apiErrorMessage(err),
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [active, mailId])
+
+  const mail = mailState.data
+  const enrichment = mail?.enrichment
+
+  const classificationLinkTo =
+    enrichment?.classification_id != null
+      ? `/settings/rules/classifications/${enrichment.classification_id}?tab=classifications&returnTo=${returnTo}`
+      : null
+
+  const parserLinkTo =
+    enrichment?.parser_id != null
+      ? `/settings/rules/parsers/${enrichment.parser_id}?tab=parsers&returnTo=${returnTo}`
+      : null
+
+  const showReprocess = String(mailId ?? '').trim() !== ''
+
+  return (
+    <>
+      <Stack spacing={1}>
+        {showReprocess && <DetailLine label="Email ID" value={mailId} />}
+
+        {mailState.status === 'loading' && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress size={32} aria-label="Loading email" />
+          </Box>
+        )}
+
+        {mailState.status === 'error' && (
+          <Alert severity="warning">{mailState.error}</Alert>
+        )}
+
+        {mailState.status === 'success' && mail && (
+          <>
+            <DetailLine label="Subject" value={mail.subject} />
+            <DetailLine label="Sender" value={mail.sender} />
+            <DetailLine label="Snippet" value={mail.snippet} />
+            <DetailLine
+              label="Internal date"
+              value={
+                mail.internal_date_ms != null
+                  ? formatDateTime(new Date(mail.internal_date_ms).toISOString())
+                  : '—'
+              }
+            />
+            <DetailLine label="Stored at" value={formatDateTime(mail.created_at)} />
+            <Box component="section" sx={{ pt: 0.5, pb: 1.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                Body
+              </Typography>
+              <MailBodyBlock text={mail.body_text} />
+            </Box>
+
+            {enrichment ? (
+              <Box component="section">
+                <DetailLine
+                  label="Classification"
+                  value={
+                    enrichment.classification_id && classificationLinkTo ? (
+                      <Link
+                        component={RouterLink}
+                        to={classificationLinkTo}
+                        underline="hover"
+                      >
+                        {enrichment.classification_name ??
+                          enrichment.classification ??
+                          String(enrichment.classification_id)}
+                      </Link>
+                    ) : (
+                      enrichment.classification_name ??
+                      enrichment.classification ??
+                      '—'
+                    )
+                  }
+                />
+                <DetailLine
+                  label="Parser"
+                  value={
+                    enrichment.parser_id && parserLinkTo ? (
+                      <Link component={RouterLink} to={parserLinkTo} underline="hover">
+                        {enrichment.parser_name ?? String(enrichment.parser_id)}
+                      </Link>
+                    ) : (
+                      enrichment.parser_name ?? '—'
+                    )
+                  }
+                />
+                <DetailLine
+                  label="Enrichment updated"
+                  value={formatDateTime(enrichment.updated_at)}
+                />
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No enrichment row for this email.
+              </Typography>
+            )}
+          </>
+        )}
+
+        {showReprocess && showReprocessButton && (
+          <Box
+            sx={{
+              pt: 2,
+              pb: 0.5,
+              display: 'flex',
+              justifyContent: reprocessAlign === 'left' ? 'flex-start' : 'center',
+            }}
+          >
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={reprocessState.status === 'loading'}
+              onClick={openReprocessConfirm}
+            >
+              {reprocessState.status === 'loading' ? 'Reprocessing…' : 'Reprocess Email'}
+            </Button>
+          </Box>
+        )}
+      </Stack>
+
+      {typeof onBindOpenReprocessConfirm === 'function' && (
+        <BindOpenReprocessConfirm
+          onBind={onBindOpenReprocessConfirm}
+          onOpen={openReprocessConfirm}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmReprocessOpen}
+        title="Reprocess this email?"
+        onClose={() => setConfirmReprocessOpen(false)}
+        cancelText="Cancel"
+        confirmText="Reprocess"
+        confirmButtonProps={{
+          color: 'warning',
+          disabled: reprocessState.status === 'loading',
+        }}
+        cancelButtonProps={{
+          disabled: reprocessState.status === 'loading',
+        }}
+        onConfirm={async () => {
+          const raw = String(mailId ?? '').trim()
+          if (!raw) return
+          setReprocessState({ status: 'loading' })
+          try {
+            await reprocessEmailByMailId(raw)
+            onNotify?.('Reprocess started for this email.')
+            setConfirmReprocessOpen(false)
+            onReprocessSuccess?.()
+          } catch (e) {
+            onNotify?.(apiErrorMessage(e))
+            setConfirmReprocessOpen(false)
+          } finally {
+            setReprocessState({ status: 'idle' })
+          }
+        }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          Reprocessing can change the derived transaction and may result in this
+          transaction being removed or getting a new ID. Continue?
+        </Typography>
+      </ConfirmDialog>
+    </>
+  )
+}
+
+function BindOpenReprocessConfirm({ onBind, onOpen }) {
+  useEffect(() => {
+    onBind(onOpen)
+    return () => onBind(null)
+  }, [onBind, onOpen])
+  return null
+}
+

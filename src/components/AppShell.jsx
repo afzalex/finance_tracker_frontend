@@ -19,6 +19,7 @@ import {
   BarChart3,
   LayoutDashboard,
   List as ListIcon,
+  Mail,
   Menu,
   Settings,
   WalletCards,
@@ -36,6 +37,7 @@ export default function AppShell() {
     () => [
       { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={20} /> },
       { label: 'Transactions', to: '/transactions', icon: <ListIcon size={20} /> },
+      { label: 'Unparsed Emails', to: '/emails/unparsed', icon: <Mail size={20} /> },
       {
         label: 'Accounts',
         to: '/accounts',

@@ -19,9 +19,6 @@ describe('Settings', () => {
     
     expect(screen.getByText('Settings')).toBeInTheDocument()
     expect(screen.getByText('Placeholder settings page.')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Backend integration is not wired yet/i)
-    ).toBeInTheDocument()
     expect(screen.getByText('API')).toBeInTheDocument()
     expect(
       screen.getByText(/Planned: configurable base URL and connectivity check./i)

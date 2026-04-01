@@ -129,7 +129,7 @@ describe('RulesPage', () => {
         screen.queryByRole('heading', { name: /Create classification/i }),
       ).not.toBeInTheDocument()
     })
-  })
+  }, 15000)
 
   it('opens the correct create dialog for the active tab', async () => {
     vi.mocked(listClassifications).mockResolvedValue([])

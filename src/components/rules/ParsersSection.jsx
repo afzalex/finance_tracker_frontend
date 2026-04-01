@@ -792,9 +792,11 @@ export default function ParsersSection({
             size="small"
             onClick={requestDismissParserDialog}
             disabled={saving}
+            variant="outlined"
           >
             Cancel
           </Button>
+          <Box sx={{ flexGrow: 1 }} />
           <Button size="small" variant="contained" onClick={submit} disabled={saving}>
             {saving ? 'Saving…' : dialog.mode === 'create' ? 'Create' : 'Save'}
           </Button>
@@ -867,9 +869,10 @@ export default function ParsersSection({
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button size="small" onClick={closeDeactivate} disabled={deactivating}>
+          <Button size="small" variant="outlined" onClick={closeDeactivate} disabled={deactivating}>
             Cancel
           </Button>
+          <Box sx={{ flexGrow: 1 }} />
           <Button
             size="small"
             variant="contained"

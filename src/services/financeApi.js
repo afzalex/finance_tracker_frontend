@@ -53,6 +53,15 @@ export async function reprocessEmailByMailId(mailId) {
   return res.data
 }
 
+/**
+ * List emails in the unparsed queue (newest first).
+ * GET /api/v1/emails/unparsed
+ */
+export async function listUnparsedEmails() {
+  const res = await emailsApi.listUnparsedEmailsApiV1EmailsUnparsedGet()
+  return res.data
+}
+
 function signedAmountFromTx(tx) {
   const n = tx.amount_parsed ?? 0
   return tx.direction === 'CREDIT' ? n : -n

@@ -31,11 +31,6 @@ export default function Settings() {
         description="Placeholder settings page."
       />
 
-      <Alert severity="info">
-        Backend integration is not wired yet. Next step: add `VITE_API_BASE_URL`
-        and swap mock services to real `fetch()` calls.
-      </Alert>
-
       <Card variant="outlined">
         <CardContent>
           <Typography variant="h6">API</Typography>
