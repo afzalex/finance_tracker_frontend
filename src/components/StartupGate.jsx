@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import {
   Box,
@@ -56,6 +56,17 @@ export default function StartupGate() {
     async () => getAppMetadata(),
   )
 
+  useEffect(() => {
+    if (!setAppMeta) return
+    if (status === 'error') {
+      setAppMeta(null)
+      return
+    }
+    if (status === 'success') {
+      setAppMeta(data ?? null)
+    }
+  }, [status, data, setAppMeta])
+
   if (status === 'idle' || status === 'loading') {
     return (
       <Box
@@ -79,7 +90,6 @@ export default function StartupGate() {
   }
 
   if (status === 'error') {
-    setAppMeta?.(null)
     const errorText = typeof error === 'string' ? error : apiErrorMessage(error)
     return (
       <FullPageMessage
@@ -109,7 +119,6 @@ export default function StartupGate() {
   const meta = data
 
   if (!meta?.is_healthy) {
-    setAppMeta?.(meta ?? null)
     return (
       <FullPageMessage
         title="Backend is unhealthy"
@@ -139,7 +148,6 @@ export default function StartupGate() {
   }
 
   if (!meta?.is_initialized) {
-    setAppMeta?.(meta ?? null)
     return (
       <FullPageMessage
         title="Gmail OAuth needs initialization"
@@ -193,8 +201,6 @@ export default function StartupGate() {
     )
   }
 
-  // App is ready.
-  setAppMeta?.(meta ?? null)
   return <Outlet />
 }
 

@@ -8,11 +8,13 @@ import {
   TransactionsApi,
 } from '../api'
 
-export const apiBasePath =
-  (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(
-    /\/+$/,
-    '',
-  )
+// In production (Docker) the SPA is served by the same server as the API,
+// so relative URLs work and no base URL is needed.
+// For local dev, set VITE_API_BASE_URL=http://localhost:8000 in .env.local
+export const apiBasePath = (import.meta.env.VITE_API_BASE_URL ?? '').replace(
+  /\/+$/,
+  '',
+)
 
 const configuration = new Configuration({ basePath: apiBasePath })
 
