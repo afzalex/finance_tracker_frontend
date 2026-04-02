@@ -63,7 +63,7 @@ export default function ClassificationsSection({
     [searchParams],
   )
   const [refreshKey, setRefreshKey] = useState(0)
-  const [mutationError, setMutationError] = useState(null)
+  const [_mutationError, setMutationError] = useState(null)
   const [errorSnack, setErrorSnack] = useState({ open: false, message: '' })
   const [snack, setSnack] = useState({ open: false, message: '' })
 

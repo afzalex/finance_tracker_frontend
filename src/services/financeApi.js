@@ -3,7 +3,7 @@ import {
   mockAnalytics,
   mockStats,
 } from '../mocks/mockData'
-import { adminApi, emailsApi, transactionsApi } from './apiConfig'
+import { adminApi, emailsApi, metadataApi, transactionsApi } from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -16,6 +16,12 @@ export function apiErrorMessage(error) {
     if (parts.length) return parts.join(', ')
   }
   return error?.message ?? 'Request failed'
+}
+
+/** GET /api/v1/meta — high-level backend status for gating the UI. */
+export async function getAppMetadata() {
+  const res = await metadataApi.getMetadataApiV1MetaGet()
+  return res.data
 }
 
 /**
@@ -197,7 +203,7 @@ export async function findTransactionRowById(
 /** GET /api/v1/transactions/distinct — provider / merchant / counterparty pickers. */
 export async function listTransactionDistinctCatalog() {
   const res =
-    await transactionsApi.listTransactionsDistinctApiV1TransactionsDistinctGet()
+    await transactionsApi.distinctTransactionCatalogApiV1TransactionsDistinctGet()
   return res.data
 }
 

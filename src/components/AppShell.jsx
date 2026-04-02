@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
-  AppBar,
   Box,
-  Divider,
   Drawer,
   IconButton,
   List,
@@ -11,7 +9,6 @@ import {
   ListItemIcon,
   ListItemText,
   Toolbar,
-  Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
@@ -56,29 +53,7 @@ export default function AppShell() {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100svh' }}>
-      <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
-        <Toolbar>
-          {isSmDown && (
-            <IconButton
-              color="inherit"
-              aria-label="Open navigation"
-              edge="start"
-              onClick={() => setMobileOpen(true)}
-              sx={{ mr: 1 }}
-            >
-              <Menu size={22} />
-            </IconButton>
-          )}
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Finance Tracker
-          </Typography>
-          <Typography variant="body2" color="inherit" sx={{ opacity: 0.8 }}>
-            Made by <a href="https://www.afzalex.com/" rel="noopener noreferrer">Mohammad Afzal</a>
-          </Typography>
-        </Toolbar>
-      </AppBar>
-
+    <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: 0 }}>
         <Drawer
           variant={isSmDown ? 'temporary' : 'permanent'}
@@ -119,17 +94,21 @@ export default function AppShell() {
               </ListItemButton>
             ))}
           </List>
-          <Divider />
-          <Box sx={{ p: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              Connect to backend later
-            </Typography>
-          </Box>
         </Drawer>
       </Box>
 
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
         <Toolbar />
+        {isSmDown && (
+          <IconButton
+            aria-label="Open navigation"
+            edge="start"
+            onClick={() => setMobileOpen(true)}
+            sx={{ mb: 2 }}
+          >
+            <Menu size={22} />
+          </IconButton>
+        )}
         <Outlet />
       </Box>
     </Box>

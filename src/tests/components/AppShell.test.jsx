@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import AppShell from '../../components/AppShell'
 import { renderWithTheme } from '../renderWithTheme'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { useMediaQuery } from '@mui/material'
 
 vi.mock('@mui/material', async (importOriginal) => {
@@ -20,15 +20,17 @@ describe('AppShell', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/']}>
-        <AppShell />
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<div>Body</div>} />
+          </Route>
+        </Routes>
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Finance Tracker')).toBeInTheDocument()
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
     expect(screen.getByText('Transactions')).toBeInTheDocument()
-    expect(screen.getByText('Connect to backend later')).toBeInTheDocument()
-    
+
     // Hamburger menu should not be present
     expect(screen.queryByLabelText('Open navigation')).not.toBeInTheDocument()
   })
@@ -39,7 +41,11 @@ describe('AppShell', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/accounts']}>
-        <AppShell />
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="accounts" element={<div>Accounts body</div>} />
+          </Route>
+        </Routes>
       </MemoryRouter>
     )
 

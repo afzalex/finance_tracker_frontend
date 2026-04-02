@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 import Settings from '../../pages/Settings'
 import { renderWithTheme } from '../renderWithTheme'
 import { MemoryRouter } from 'react-router-dom'
-import { reprocessAllEmailsOffline } from '../../services/financeApi'
 
 vi.mock('../../services/financeApi', () => ({
   reprocessAllEmailsOffline: vi.fn(),

@@ -1,4 +1,4 @@
-import { isValidElement, useEffect, useState } from 'react'
+import { isValidElement, useState } from 'react'
 import {
   Box,
   Button,
@@ -79,17 +79,22 @@ export default function TransactionDetailDialog({
 
   const [detailTab, setDetailTab] = useState(initialTab ?? 'transaction')
 
-  useEffect(() => {
-    if (!open) return
-    if (!initialTab) return
-    setDetailTab(initialTab)
-  }, [open, initialTab])
-
   const titleId =
     detailTab === 'email' ? 'detail-source-email-title' : 'transaction-detail-title'
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      scroll="paper"
+      TransitionProps={{
+        onEnter: () => {
+          if (initialTab) setDetailTab(initialTab)
+        },
+      }}
+    >
       <DialogTitle id={titleId}>
         {detailTab === 'email' ? 'Source Email' : 'Transaction Details'}
       </DialogTitle>

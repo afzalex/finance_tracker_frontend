@@ -9,7 +9,7 @@ import {
   Tab,
   Tabs,
 } from '@mui/material'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import ClassificationsSection from '../components/rules/ClassificationsSection'
 import ParsersSection from '../components/rules/ParsersSection'
@@ -45,20 +45,15 @@ export default function RulesPage() {
         ? 1
         : null
 
-  const [tab, setTab] = useState(0)
+  const tab = useMemo(() => {
+    if (forcedTab != null) return forcedTab
+    if (tabParam === 'parsers') return 1
+    return 0
+  }, [forcedTab, tabParam])
+
   const [classificationsShowInactive, setClassificationsShowInactive] =
     useState(false)
   const [parsersShowInactive, setParsersShowInactive] = useState(false)
-
-  useEffect(() => {
-    if (forcedTab != null) {
-      setTab(forcedTab)
-      return
-    }
-    if (tabParam === 'parsers') setTab(1)
-    else if (tabParam === 'classifications') setTab(0)
-    // else keep existing
-  }, [forcedTab, tabParam])
 
   const showInactive =
     tab === 0 ? classificationsShowInactive : parsersShowInactive
@@ -77,7 +72,6 @@ export default function RulesPage() {
   }
 
   const setTabAndUrl = (nextTab) => {
-    setTab(nextTab)
     const next = nextTab === 1 ? 'parsers' : 'classifications'
     if (
       routeClassificationId != null ||
