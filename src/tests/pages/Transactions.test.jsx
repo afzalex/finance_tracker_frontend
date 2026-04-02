@@ -9,11 +9,17 @@ import * as financeApi from '../../services/financeApi'
 vi.mock('../../services/financeApi', () => ({
   listTransactions: vi.fn(),
   findTransactionRowById: vi.fn(),
+  listTransactionDistinctCatalog: vi.fn(),
 }))
 
 describe('Transactions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    financeApi.listTransactionDistinctCatalog.mockResolvedValue({
+      providers: ['Plaid'],
+      merchants: [],
+      counterparties: [],
+    })
   })
 
   it('renders table and handles search and pagination', async () => {
@@ -75,11 +81,15 @@ describe('Transactions', () => {
     fireEvent.change(searchInput, { target: { value: 'Starbucks' } })
 
     await waitFor(() => {
-      expect(financeApi.listTransactions).toHaveBeenLastCalledWith({
-        query: 'Starbucks',
-        page: 1,
-        pageSize: 25
-      })
+      expect(financeApi.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          query: 'Starbucks',
+          page: 1,
+          pageSize: 25,
+          sortBy: 'transacted_at',
+          sortOrder: 'desc',
+        }),
+      )
       expect(screen.getByText('Coffee')).toBeInTheDocument()
     })
 
@@ -99,9 +109,13 @@ describe('Transactions', () => {
     if (nextPageButton && !nextPageButton.disabled) {
       await user.click(nextPageButton)
       await waitFor(() => {
-        expect(financeApi.listTransactions).toHaveBeenLastCalledWith(expect.objectContaining({
-          page: 2
-        }))
+        expect(financeApi.listTransactions).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            page: 2,
+            sortBy: 'transacted_at',
+            sortOrder: 'desc',
+          }),
+        )
       })
     }
   })
@@ -201,7 +215,7 @@ describe('Transactions', () => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     })
 
-    const rowsPerPageDropdown = screen.getByRole('combobox') // MUI Select uses 'combobox' by default
+    const rowsPerPageDropdown = screen.getByLabelText(/rows per page/i)
     await user.click(rowsPerPageDropdown)
 
     const option50 = await screen.findByRole('option', { name: '50' })
@@ -213,10 +227,14 @@ describe('Transactions', () => {
     })
 
     await waitFor(() => {
-      expect(financeApi.listTransactions).toHaveBeenLastCalledWith(expect.objectContaining({
-        pageSize: 50,
-        page: 1
-      }))
+      expect(financeApi.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          pageSize: 50,
+          page: 1,
+          sortBy: 'transacted_at',
+          sortOrder: 'desc',
+        }),
+      )
     })
   })
 })

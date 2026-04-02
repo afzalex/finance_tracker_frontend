@@ -1,4 +1,5 @@
 import {
+  AdminApi,
   ClassificationsApi,
   Configuration,
   EmailsApi,
@@ -16,5 +17,6 @@ const configuration = new Configuration({ basePath: apiBasePath })
 
 export const transactionsApi = new TransactionsApi(configuration)
 export const emailsApi = new EmailsApi(configuration)
+export const adminApi = new AdminApi(configuration)
 export const classificationsApi = new ClassificationsApi(configuration)
 export const parsersApi = new ParsersApi(configuration)

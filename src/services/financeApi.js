@@ -3,7 +3,7 @@ import {
   mockAnalytics,
   mockStats,
 } from '../mocks/mockData'
-import { emailsApi, transactionsApi } from './apiConfig'
+import { adminApi, emailsApi, transactionsApi } from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -32,10 +32,12 @@ export async function getFetchedEmailByMailId(mailId) {
 
 /**
  * Re-run classification + parsing for all cached emails (offline).
- * POST /api/v1/emails/reprocess
+ * POST /api/v1/admin/emails/reprocess
+ * @param {{ wait?: boolean }} [opts] wait=true runs synchronously (can be slow).
  */
-export async function reprocessAllEmailsOffline() {
-  const res = await emailsApi.reprocessAllEmailsOfflineApiV1EmailsReprocessPost()
+export async function reprocessAllEmailsOffline({ wait = false } = {}) {
+  const res =
+    await adminApi.reprocessAllEmailsOfflineApiV1AdminEmailsReprocessPost(wait)
   return res.data
 }
 
@@ -53,12 +55,24 @@ export async function reprocessEmailByMailId(mailId) {
   return res.data
 }
 
-/**
- * List emails in the unparsed queue (newest first).
- * GET /api/v1/emails/unparsed
- */
+/** GET /api/v1/emails/unparsed — list items omit body/snippet; includes queue `id` (unparsed_message_id). */
 export async function listUnparsedEmails() {
   const res = await emailsApi.listUnparsedEmailsApiV1EmailsUnparsedGet()
+  return res.data
+}
+
+/**
+ * One unparsed queue row with full cached email + enrichment.
+ * GET /api/v1/emails/unparsed/{unparsed_message_id}
+ */
+export async function getUnparsedEmailDetail(unparsedMessageId) {
+  const id = Number(unparsedMessageId)
+  if (!Number.isFinite(id)) throw new Error('Invalid unparsed message id')
+
+  const res =
+    await emailsApi.getUnparsedEmailDetailApiV1EmailsUnparsedUnparsedMessageIdGet(
+      id,
+    )
   return res.data
 }
 
@@ -98,23 +112,48 @@ export async function listAccounts() {
   return mockAccounts
 }
 
-export async function listTransactions({ query, page, pageSize } = {}) {
+/**
+ * @param {{
+ *   query?: string,
+ *   page?: number,
+ *   pageSize?: number,
+ *   provider?: string,
+ *   direction?: 'DEBIT'|'CREDIT',
+ *   sortBy?: 'transacted_at'|'amount'|'merchant'|'provider'|'account_id'|'transaction_type'|'counterparty',
+ *   sortOrder?: 'asc'|'desc',
+ * }} [opts]
+ */
+export async function listTransactions({
+  query,
+  page,
+  pageSize,
+  sortBy = 'transacted_at',
+  sortOrder = 'desc',
+  provider,
+  direction,
+} = {}) {
   const currentPage = Math.max(1, page ?? 1)
   const currentPageSize = Math.max(1, pageSize ?? 10)
   const search = (query ?? '').trim() || undefined
+  const providerParam =
+    provider != null && String(provider).trim() !== ''
+      ? String(provider).trim()
+      : undefined
+  const directionParam =
+    direction === 'DEBIT' || direction === 'CREDIT' ? direction : undefined
 
   const txResult = await transactionsApi.listTransactionsApiV1TransactionsGet(
     currentPage,
     currentPageSize,
     undefined,
+    providerParam,
     undefined,
-    undefined,
-    undefined,
+    directionParam,
     undefined,
     undefined,
     search,
-    'transacted_at',
-    'desc',
+    sortBy,
+    sortOrder,
   )
 
   const body = txResult.data
@@ -134,19 +173,32 @@ export async function listTransactions({ query, page, pageSize } = {}) {
  */
 export async function findTransactionRowById(
   transactionId,
-  { pageSize = 25, maxPages = 20 } = {},
+  { pageSize = 25, maxPages = 20, query, provider, direction } = {},
 ) {
   const id = String(transactionId ?? '').trim()
   if (!id) throw new Error('Missing transaction id')
 
   for (let p = 1; p <= maxPages; p += 1) {
-    const res = await listTransactions({ page: p, pageSize })
+    const res = await listTransactions({
+      page: p,
+      pageSize,
+      query,
+      provider,
+      direction,
+    })
     const match = (res.items ?? []).find((t) => String(t.id) === id)
     if (match) return match
     if ((res.items ?? []).length === 0) break
   }
 
   return null
+}
+
+/** GET /api/v1/transactions/distinct — provider / merchant / counterparty pickers. */
+export async function listTransactionDistinctCatalog() {
+  const res =
+    await transactionsApi.listTransactionsDistinctApiV1TransactionsDistinctGet()
+  return res.data
 }
 
 export async function getAnalytics() {

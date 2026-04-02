@@ -13,8 +13,25 @@ import ConfirmDialog from './ConfirmDialog'
 import {
   apiErrorMessage,
   getFetchedEmailByMailId,
+  getUnparsedEmailDetail,
   reprocessEmailByMailId,
 } from '../services/financeApi'
+
+function normalizeUnparsedDetail(d) {
+  if (!d?.email) return null
+  const enrichment =
+    d.enrichment ??
+    (d.classification_id != null || d.parser_id != null
+      ? {
+          classification_id: d.classification_id ?? null,
+          classification_name: d.classification_name ?? null,
+          parser_id: d.parser_id ?? null,
+          parser_name: d.parser_name ?? null,
+          updated_at: d.created_at,
+        }
+      : null)
+  return { ...d.email, enrichment }
+}
 import { formatDateTime } from '../utils/format'
 
 function DetailLine({ label, value }) {
@@ -68,6 +85,7 @@ function MailBodyBlock({ text }) {
 
 export default function EmailSourcePanel({
   mailId,
+  unparsedMessageId,
   active,
   onNotify,
   onReprocessSuccess,
@@ -94,14 +112,29 @@ export default function EmailSourcePanel({
   )
 
   useEffect(() => {
-    const raw = String(mailId ?? '').trim()
-    if (!active || !raw) return
+    if (!active) return
+
+    const unparsedId = Number(unparsedMessageId)
+    const useUnparsedDetail = Number.isFinite(unparsedId)
+    const rawMail = String(mailId ?? '').trim()
+
+    if (!useUnparsedDetail && !rawMail) return
+
     let cancelled = false
     setReprocessState({ status: 'idle' })
     queueMicrotask(() => {
       if (!cancelled) setMailState({ status: 'loading', data: null, error: null })
     })
-    getFetchedEmailByMailId(raw)
+
+    const load = useUnparsedDetail
+      ? getUnparsedEmailDetail(unparsedId).then((detail) => {
+          const normalized = normalizeUnparsedDetail(detail)
+          if (!normalized) throw new Error('Invalid unparsed email response')
+          return normalized
+        })
+      : getFetchedEmailByMailId(rawMail)
+
+    load
       .then((data) => {
         if (!cancelled) setMailState({ status: 'success', data, error: null })
       })
@@ -117,7 +150,7 @@ export default function EmailSourcePanel({
     return () => {
       cancelled = true
     }
-  }, [active, mailId])
+  }, [active, mailId, unparsedMessageId])
 
   const mail = mailState.data
   const enrichment = mail?.enrichment
@@ -132,12 +165,23 @@ export default function EmailSourcePanel({
       ? `/settings/rules/parsers/${enrichment.parser_id}?tab=parsers&returnTo=${returnTo}`
       : null
 
-  const showReprocess = String(mailId ?? '').trim() !== ''
+  const reprocessMailId =
+    mailState.status === 'success' && mailState.data?.mail_id != null
+      ? String(mailState.data.mail_id).trim()
+      : String(mailId ?? '').trim()
+
+  const showReprocess =
+    Number.isFinite(Number(unparsedMessageId)) || reprocessMailId !== ''
 
   return (
     <>
       <Stack spacing={1}>
-        {showReprocess && <DetailLine label="Email ID" value={mailId} />}
+        {showReprocess && (
+          <DetailLine
+            label="Email ID"
+            value={mail?.mail_id ?? mailId ?? '—'}
+          />
+        )}
 
         {mailState.status === 'loading' && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -253,13 +297,14 @@ export default function EmailSourcePanel({
         confirmText="Reprocess"
         confirmButtonProps={{
           color: 'warning',
-          disabled: reprocessState.status === 'loading',
+          disabled:
+            reprocessState.status === 'loading' || reprocessMailId === '',
         }}
         cancelButtonProps={{
           disabled: reprocessState.status === 'loading',
         }}
         onConfirm={async () => {
-          const raw = String(mailId ?? '').trim()
+          const raw = reprocessMailId
           if (!raw) return
           setReprocessState({ status: 'loading' })
           try {

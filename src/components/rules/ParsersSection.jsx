@@ -19,7 +19,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TableSortLabel,
   TextField,
   Typography,
 } from '@mui/material'
@@ -33,6 +32,7 @@ import {
 } from '../../api'
 import useResource from '../../hooks/useResource'
 import LoadingBlock from '../LoadingBlock'
+import SortableTableHeaderCell from '../SortableTableHeaderCell'
 import {
   createParser,
   deactivateParser,
@@ -62,7 +62,7 @@ export default function ParsersSection({
   onCloseRule,
 }) {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const safeReturnPath = useMemo(
     () => parseSafeReturnToParam(searchParams.get('returnTo')),
     [searchParams],
@@ -160,6 +160,11 @@ export default function ParsersSection({
       variant: null,
       staySnack: null,
     })
+    if (searchParams.get('returnTo')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('returnTo')
+      setSearchParams(next, { replace: true })
+    }
     if (variant === 'dismiss') performCloseDialog()
     if (snack) setSnack({ open: true, message: snack })
   }
@@ -392,51 +397,47 @@ export default function ParsersSection({
           <Table size="small" aria-label="parsers table">
             <TableHead>
               <TableRow>
-                <TableCell sortDirection={sortBy === 'id' ? sortDir : false}>
-                  <TableSortLabel
-                    active={sortBy === 'id'}
-                    direction={sortBy === 'id' ? sortDir : 'asc'}
-                    onClick={() => toggleSort('id')}
-                  >
-                    ID
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={sortBy === 'label' ? sortDir : false}>
-                  <TableSortLabel
-                    active={sortBy === 'label'}
-                    direction={sortBy === 'label' ? sortDir : 'asc'}
-                    onClick={() => toggleSort('label')}
-                  >
-                    Label
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={sortBy === 'name' ? sortDir : false}>
-                  <TableSortLabel
-                    active={sortBy === 'name'}
-                    direction={sortBy === 'name' ? sortDir : 'asc'}
-                    onClick={() => toggleSort('name')}
-                  >
-                    Name
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align="right" sortDirection={sortBy === 'priority' ? sortDir : false}>
-                  <TableSortLabel
-                    active={sortBy === 'priority'}
-                    direction={sortBy === 'priority' ? sortDir : 'asc'}
-                    onClick={() => toggleSort('priority')}
-                  >
-                    Priority
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell sortDirection={sortBy === 'updated_at' ? sortDir : false}>
-                  <TableSortLabel
-                    active={sortBy === 'updated_at'}
-                    direction={sortBy === 'updated_at' ? sortDir : 'asc'}
-                    onClick={() => toggleSort('updated_at')}
-                  >
-                    Updated
-                  </TableSortLabel>
-                </TableCell>
+                <SortableTableHeaderCell
+                  sortDirection={sortBy === 'id' ? sortDir : false}
+                  active={sortBy === 'id'}
+                  direction={sortBy === 'id' ? sortDir : 'asc'}
+                  onSort={() => toggleSort('id')}
+                >
+                  ID
+                </SortableTableHeaderCell>
+                <SortableTableHeaderCell
+                  sortDirection={sortBy === 'label' ? sortDir : false}
+                  active={sortBy === 'label'}
+                  direction={sortBy === 'label' ? sortDir : 'asc'}
+                  onSort={() => toggleSort('label')}
+                >
+                  Label
+                </SortableTableHeaderCell>
+                <SortableTableHeaderCell
+                  sortDirection={sortBy === 'name' ? sortDir : false}
+                  active={sortBy === 'name'}
+                  direction={sortBy === 'name' ? sortDir : 'asc'}
+                  onSort={() => toggleSort('name')}
+                >
+                  Name
+                </SortableTableHeaderCell>
+                <SortableTableHeaderCell
+                  align="right"
+                  sortDirection={sortBy === 'priority' ? sortDir : false}
+                  active={sortBy === 'priority'}
+                  direction={sortBy === 'priority' ? sortDir : 'asc'}
+                  onSort={() => toggleSort('priority')}
+                >
+                  Priority
+                </SortableTableHeaderCell>
+                <SortableTableHeaderCell
+                  sortDirection={sortBy === 'updated_at' ? sortDir : false}
+                  active={sortBy === 'updated_at'}
+                  direction={sortBy === 'updated_at' ? sortDir : 'asc'}
+                  onSort={() => toggleSort('updated_at')}
+                >
+                  Updated
+                </SortableTableHeaderCell>
                 <TableCell align="right">Status</TableCell>
               </TableRow>
             </TableHead>

@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
   Card,
   CardContent,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Portal,
+  Select,
   Snackbar,
   Stack,
   Table,
@@ -19,9 +23,15 @@ import {
 } from '@mui/material'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import LoadingBlock from '../components/LoadingBlock'
+import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
 import PageHeader from '../components/PageHeader'
 import TransactionDetailDialog from '../components/TransactionDetailDialog'
-import { apiErrorMessage, findTransactionRowById, listTransactions } from '../services/financeApi'
+import {
+  apiErrorMessage,
+  findTransactionRowById,
+  listTransactionDistinctCatalog,
+  listTransactions,
+} from '../services/financeApi'
 import useResource from '../hooks/useResource'
 import { signedAmountSx } from '../utils/moneySx'
 import { formatDateTime } from '../utils/format'
@@ -49,6 +59,26 @@ function displayCounterparty(row) {
   return v != null && String(v).trim() !== '' ? String(v) : '—'
 }
 
+/** UI column keys for the transactions table. */
+const TX_SORT_COL = {
+  date: 'date',
+  description: 'description',
+  account: 'account',
+  counterparty: 'counterparty',
+  provider: 'provider',
+  amount: 'amount',
+}
+
+/** Maps to `GET /api/v1/transactions` `sort_by` (server-side). */
+const TX_SORT_API = {
+  [TX_SORT_COL.date]: 'transacted_at',
+  [TX_SORT_COL.description]: 'transaction_type',
+  [TX_SORT_COL.account]: 'account_id',
+  [TX_SORT_COL.counterparty]: 'counterparty',
+  [TX_SORT_COL.provider]: 'provider',
+  [TX_SORT_COL.amount]: 'amount',
+}
+
 export default function Transactions() {
   const navigate = useNavigate()
   const params = useParams()
@@ -58,6 +88,8 @@ export default function Transactions() {
   const tabParam = String(searchParams.get('tab') ?? '').toLowerCase()
 
   const [query, setQuery] = useState('')
+  const [providerFilter, setProviderFilter] = useState('')
+  const [directionFilter, setDirectionFilter] = useState('')
   const [page, setPage] = useState(() => {
     const n = Number(searchParams.get('page'))
     return Number.isFinite(n) && n >= 0 ? n : 0
@@ -69,14 +101,42 @@ export default function Transactions() {
   const [selectedRow, setSelectedRow] = useState(null)
   const suppressRouteOpenRef = useRef(false)
   const [snack, setSnack] = useState({ open: false, message: '' })
+  const [sortBy, setSortBy] = useState(TX_SORT_COL.date)
+  const [sortDir, setSortDir] = useState('desc')
 
-  const resourceKey = `transactions:${query}:${page}:${rowsPerPage}`
+  const distinctKey = 'transactions:distinct-catalog'
+  const {
+    status: distinctStatus,
+    data: distinctData,
+    error: distinctError,
+  } = useResource(distinctKey, () => listTransactionDistinctCatalog())
+
+  const resourceKey = `transactions:${query}:${providerFilter}:${directionFilter}:${page}:${rowsPerPage}:${sortBy}:${sortDir}`
   const { status, data, error } = useResource(resourceKey, () =>
     listTransactions({
       query,
       page: page + 1,
       pageSize: rowsPerPage,
+      provider: providerFilter,
+      direction: directionFilter || undefined,
+      sortBy: TX_SORT_API[sortBy],
+      sortOrder: sortDir,
     }),
+  )
+
+  const toggleTxSort = useCallback(
+    (key) => {
+      if (sortBy === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      } else {
+        setSortBy(key)
+        setSortDir(
+          key === TX_SORT_COL.date || key === TX_SORT_COL.amount ? 'desc' : 'asc',
+        )
+        setPage(0)
+      }
+    },
+    [sortBy],
   )
 
   const rows = useMemo(() => data?.items ?? [], [data])
@@ -142,7 +202,12 @@ export default function Transactions() {
     let cancelled = false
     setRouteOpening(true)
     setRouteOpenError(null)
-    findTransactionRowById(routeTransactionId, { pageSize: rowsPerPage })
+    findTransactionRowById(routeTransactionId, {
+      pageSize: rowsPerPage,
+      query,
+      provider: providerFilter,
+      direction: directionFilter || undefined,
+    })
       .then((found) => {
         if (cancelled) return
         if (found) {
@@ -162,12 +227,22 @@ export default function Transactions() {
     return () => {
       cancelled = true
     }
-  }, [routeTransactionId, rows, rowsPerPage, selectedRow])
+  }, [
+    routeTransactionId,
+    rows,
+    rowsPerPage,
+    selectedRow,
+    query,
+    providerFilter,
+    directionFilter,
+  ])
 
   const handleQueryChange = (e) => {
     setQuery(e.target.value)
     setPage(0)
   }
+
+  const providerOptions = distinctData?.providers ?? []
 
   const openDetail = (
     row,
@@ -187,18 +262,69 @@ export default function Transactions() {
 
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Transactions"
-        description="Server-side search and pagination via the Finance Tracker API."
-      />
+      <PageHeader title="Transactions" />
 
-      <TextField
-        label="Filter"
-        value={query}
-        onChange={handleQueryChange}
-        placeholder="Search merchant or payee…"
-        size="small"
-      />
+      <Stack
+        direction="row"
+        flexWrap="wrap"
+        gap={2}
+        alignItems="center"
+        sx={{ width: '100%' }}
+      >
+        <TextField
+          label="Filter"
+          value={query}
+          onChange={handleQueryChange}
+          placeholder="Search merchant or payee…"
+          size="small"
+          sx={{ minWidth: 220, flex: '1 1 200px' }}
+        />
+        <FormControl size="small" sx={{ minWidth: 160 }} disabled={distinctStatus !== 'success'}>
+          <InputLabel id="tx-filter-provider-label">Provider</InputLabel>
+          <Select
+            labelId="tx-filter-provider-label"
+            label="Provider"
+            value={providerFilter}
+            onChange={(e) => {
+              setProviderFilter(e.target.value)
+              setPage(0)
+            }}
+          >
+            <MenuItem value="">
+              <em>All</em>
+            </MenuItem>
+            {providerOptions.map((p) => (
+              <MenuItem key={p} value={p}>
+                {p}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id="tx-filter-direction-label">Direction</InputLabel>
+          <Select
+            labelId="tx-filter-direction-label"
+            label="Direction"
+            value={directionFilter}
+            onChange={(e) => {
+              setDirectionFilter(e.target.value)
+              setPage(0)
+            }}
+          >
+            <MenuItem value="">
+              <em>All</em>
+            </MenuItem>
+            <MenuItem value="DEBIT">Debit</MenuItem>
+            <MenuItem value="CREDIT">Credit</MenuItem>
+          </Select>
+        </FormControl>
+      </Stack>
+
+      {distinctStatus === 'error' && distinctError ? (
+        <Alert severity="warning">
+          Could not load provider list: {distinctError}
+        </Alert>
+      ) : null}
 
       {error && <Alert severity="error">{error}</Alert>}
       {routeOpenError && <Alert severity="warning">{routeOpenError}</Alert>}
@@ -227,14 +353,85 @@ export default function Transactions() {
                 {TABLE_COLGROUP}
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={clipCellSx}>Date</TableCell>
-                    <TableCell sx={clipCellSx}>Description</TableCell>
-                    <TableCell sx={clipCellSx}>Account</TableCell>
-                    <TableCell sx={clipCellSx}>Counterparty</TableCell>
-                    <TableCell sx={clipCellSx}>Provider</TableCell>
-                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                    <SortableTableHeaderCell
+                      sx={clipCellSx}
+                      sortDirection={
+                        sortBy === TX_SORT_COL.date ? sortDir : false
+                      }
+                      active={sortBy === TX_SORT_COL.date}
+                      direction={
+                        sortBy === TX_SORT_COL.date ? sortDir : 'asc'
+                      }
+                      onSort={() => toggleTxSort(TX_SORT_COL.date)}
+                    >
+                      Date
+                    </SortableTableHeaderCell>
+                    <SortableTableHeaderCell
+                      sx={clipCellSx}
+                      sortDirection={
+                        sortBy === TX_SORT_COL.description ? sortDir : false
+                      }
+                      active={sortBy === TX_SORT_COL.description}
+                      direction={
+                        sortBy === TX_SORT_COL.description ? sortDir : 'asc'
+                      }
+                      onSort={() => toggleTxSort(TX_SORT_COL.description)}
+                    >
+                      Description
+                    </SortableTableHeaderCell>
+                    <SortableTableHeaderCell
+                      sx={clipCellSx}
+                      sortDirection={
+                        sortBy === TX_SORT_COL.account ? sortDir : false
+                      }
+                      active={sortBy === TX_SORT_COL.account}
+                      direction={
+                        sortBy === TX_SORT_COL.account ? sortDir : 'asc'
+                      }
+                      onSort={() => toggleTxSort(TX_SORT_COL.account)}
+                    >
+                      Account
+                    </SortableTableHeaderCell>
+                    <SortableTableHeaderCell
+                      sx={clipCellSx}
+                      sortDirection={
+                        sortBy === TX_SORT_COL.counterparty ? sortDir : false
+                      }
+                      active={sortBy === TX_SORT_COL.counterparty}
+                      direction={
+                        sortBy === TX_SORT_COL.counterparty ? sortDir : 'asc'
+                      }
+                      onSort={() => toggleTxSort(TX_SORT_COL.counterparty)}
+                    >
+                      Counterparty
+                    </SortableTableHeaderCell>
+                    <SortableTableHeaderCell
+                      sx={clipCellSx}
+                      sortDirection={
+                        sortBy === TX_SORT_COL.provider ? sortDir : false
+                      }
+                      active={sortBy === TX_SORT_COL.provider}
+                      direction={
+                        sortBy === TX_SORT_COL.provider ? sortDir : 'asc'
+                      }
+                      onSort={() => toggleTxSort(TX_SORT_COL.provider)}
+                    >
+                      Provider
+                    </SortableTableHeaderCell>
+                    <SortableTableHeaderCell
+                      align="right"
+                      sx={{ whiteSpace: 'nowrap' }}
+                      sortDirection={
+                        sortBy === TX_SORT_COL.amount ? sortDir : false
+                      }
+                      active={sortBy === TX_SORT_COL.amount}
+                      direction={
+                        sortBy === TX_SORT_COL.amount ? sortDir : 'asc'
+                      }
+                      onSort={() => toggleTxSort(TX_SORT_COL.amount)}
+                    >
                       Amount
-                    </TableCell>
+                    </SortableTableHeaderCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

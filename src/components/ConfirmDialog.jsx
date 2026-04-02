@@ -17,7 +17,7 @@ export default function ConfirmDialog({
       {title ? <DialogTitle>{title}</DialogTitle> : null}
       <DialogContent dividers>{children}</DialogContent>
       <DialogActions sx={{ gap: 1 }}>
-        <Button size="small" onClick={onClose} {...cancelButtonProps}>
+        <Button size="small" onClick={onClose} variant='outlined' {...cancelButtonProps}>
           {cancelText}
         </Button>
         <Button
