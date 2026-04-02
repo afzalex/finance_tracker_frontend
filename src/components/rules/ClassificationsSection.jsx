@@ -51,8 +51,8 @@ function toNullablePriority(v) {
 
 export default function ClassificationsSection({
   showInactive,
-  createRequestId,
   routeId,
+  routeCreate = false,
   onOpenRule,
   onCloseRule,
 }) {
@@ -129,8 +129,9 @@ export default function ClassificationsSection({
 
   const performCloseDialog = () => {
     const wasEdit = dialog.mode === 'edit'
+    const wasCreateFromRoute = dialog.mode === 'create' && routeCreate
     setDialog({ open: false, mode: 'create', rule: null })
-    if (wasEdit) onCloseRule?.()
+    if (wasEdit || wasCreateFromRoute) onCloseRule?.()
   }
 
   const [leaveReturnDialog, setLeaveReturnDialog] = useState({
@@ -191,10 +192,16 @@ export default function ClassificationsSection({
   }
 
   useEffect(() => {
-    if (!createRequestId) return
+    if (!routeCreate) return
     openCreate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createRequestId])
+  }, [routeCreate])
+
+  useEffect(() => {
+    if (routeCreate) return
+    if (!dialog.open || dialog.mode !== 'create') return
+    setDialog({ open: false, mode: 'create', rule: null })
+  }, [routeCreate, dialog.open, dialog.mode])
 
   const openEdit = (rule, { syncUrl } = { syncUrl: true }) => {
     setMutationError(null)

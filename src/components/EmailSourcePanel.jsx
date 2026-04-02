@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material'
 import ConfirmDialog from './ConfirmDialog'
+import { MessageType } from '../api'
 import {
   apiErrorMessage,
   getFetchedEmailByMailId,
@@ -23,6 +24,7 @@ function normalizeUnparsedDetail(d) {
     d.enrichment ??
     (d.classification_id != null || d.parser_id != null
       ? {
+          classification: d.classification ?? null,
           classification_id: d.classification_id ?? null,
           classification_name: d.classification_name ?? null,
           parser_id: d.parser_id ?? null,
@@ -31,6 +33,17 @@ function normalizeUnparsedDetail(d) {
         }
       : null)
   return { ...d.email, enrichment }
+}
+
+/** `enrichment.classification` is the message type (e.g. TRANSACTION_ALERT). */
+function isTransactionAlertClassification(enrichment) {
+  const raw = enrichment?.classification
+  if (raw == null || String(raw).trim() === '') return false
+  const normalized = String(raw).trim().toUpperCase().replace(/\s+/g, '_')
+  return (
+    normalized === MessageType.TransactionAlert ||
+    normalized === 'TRANSACTIONALERT'
+  )
 }
 import { formatDateTime } from '../utils/format'
 
@@ -165,6 +178,8 @@ export default function EmailSourcePanel({
       ? `/settings/rules/parsers/${enrichment.parser_id}?tab=parsers&returnTo=${returnTo}`
       : null
 
+  const createParserLinkTo = `/settings/rules/parsers/new?tab=parsers&returnTo=${returnTo}`
+
   const reprocessMailId =
     mailState.status === 'success' && mailState.data?.mail_id != null
       ? String(mailState.data.mail_id).trim()
@@ -239,12 +254,32 @@ export default function EmailSourcePanel({
                 <DetailLine
                   label="Parser"
                   value={
-                    enrichment.parser_id && parserLinkTo ? (
+                    enrichment.parser_id != null && parserLinkTo ? (
                       <Link component={RouterLink} to={parserLinkTo} underline="hover">
                         {enrichment.parser_name ?? String(enrichment.parser_id)}
                       </Link>
+                    ) : String(enrichment.parser_name ?? '').trim() !== '' ? (
+                      enrichment.parser_name
+                    ) : isTransactionAlertClassification(enrichment) ? (
+                      <Stack component="span" spacing={0.5}>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          color="text.secondary"
+                        >
+                          No Parser Found
+                        </Typography>
+                        <Link
+                          component={RouterLink}
+                          to={createParserLinkTo}
+                          underline="hover"
+                          sx={{ fontStyle: 'italic', alignSelf: 'flex-start' }}
+                        >
+                          Create parser
+                        </Link>
+                      </Stack>
                     ) : (
-                      enrichment.parser_name ?? '—'
+                      '—'
                     )
                   }
                 />

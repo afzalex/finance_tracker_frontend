@@ -24,7 +24,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import EmailSourcePanel from '../components/EmailSourcePanel'
 import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
 import LoadingBlock from '../components/LoadingBlock'
@@ -100,6 +100,32 @@ const UNPARSED_SORT = {
   mailId: 'mailId',
 }
 
+/** List view query: q, wnp, cls, par, sort (e.g. received:desc). */
+const UNPARSED_Q = {
+  subject: 'q',
+  whyNotParsed: 'wnp',
+  classification: 'cls',
+  parser: 'par',
+  sort: 'sort',
+}
+
+function parseSortParam(sp) {
+  const raw = sp.get(UNPARSED_Q.sort)
+  const defaults = { sortBy: UNPARSED_SORT.received, sortDir: 'desc' }
+  if (!raw) return defaults
+  const i = raw.lastIndexOf(':')
+  if (i < 1) return defaults
+  const by = raw.slice(0, i)
+  const dir = raw.slice(i + 1)
+  if (!Object.values(UNPARSED_SORT).includes(by)) return defaults
+  if (dir !== 'asc' && dir !== 'desc') return defaults
+  return { sortBy: by, sortDir: dir }
+}
+
+function isDefaultUnparsedSort(sortBy, sortDir) {
+  return sortBy === UNPARSED_SORT.received && sortDir === 'desc'
+}
+
 function compareUnparsedRows(a, b, sortBy, sortDir) {
   const dir = sortDir === 'asc' ? 1 : -1
   let cmp = 0
@@ -147,37 +173,48 @@ function compareUnparsedRows(a, b, sortBy, sortDir) {
 export default function UnparsedEmails() {
   const navigate = useNavigate()
   const params = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   /** Route segment: numeric = unparsed queue id; otherwise legacy provider mail_id. */
   const routeDetailKey = params.mailId ? String(params.mailId) : null
   const [uiDetailKey, setUiDetailKey] = useState(routeDetailKey)
   const [snack, setSnack] = useState({ open: false, message: '' })
   const [openReprocessConfirm, setOpenReprocessConfirm] = useState(null)
-  const [filterClassification, setFilterClassification] = useState(FILTER_ALL)
-  const [filterParser, setFilterParser] = useState(FILTER_ALL)
-  const [filterWhyNotParsed, setFilterWhyNotParsed] = useState(FILTER_ALL)
-  const [subjectQuery, setSubjectQuery] = useState('')
+  const subjectQuery = searchParams.get(UNPARSED_Q.subject) ?? ''
+  const filterWhyNotParsed = searchParams.get(UNPARSED_Q.whyNotParsed) ?? FILTER_ALL
+  const filterClassification = searchParams.get(UNPARSED_Q.classification) ?? FILTER_ALL
+  const filterParser = searchParams.get(UNPARSED_Q.parser) ?? FILTER_ALL
+  const { sortBy, sortDir } = useMemo(
+    () => parseSortParam(searchParams),
+    [searchParams],
+  )
   const [listRefreshKey, setListRefreshKey] = useState(0)
-  const [sortBy, setSortBy] = useState(UNPARSED_SORT.received)
-  const [sortDir, setSortDir] = useState('desc')
 
   const bindOpenReprocessConfirm = useCallback(
     (fn) => setOpenReprocessConfirm(() => fn),
     [],
   )
 
+  const listSearchString = searchParams.toString()
+
   const openDetail = useCallback(
     (queueOrMailId) => {
       const seg = String(queueOrMailId ?? '')
       setUiDetailKey(seg)
-      navigate(`/emails/unparsed/${encodeURIComponent(seg)}`)
+      navigate({
+        pathname: `/emails/unparsed/${encodeURIComponent(seg)}`,
+        search: listSearchString ? `?${listSearchString}` : '',
+      })
     },
-    [navigate],
+    [navigate, listSearchString],
   )
 
   const closeDetail = useCallback(() => {
     setUiDetailKey(null)
-    navigate('/emails/unparsed')
-  }, [navigate])
+    navigate({
+      pathname: '/emails/unparsed',
+      search: listSearchString ? `?${listSearchString}` : '',
+    })
+  }, [navigate, listSearchString])
 
   const onReprocessSuccess = useCallback(() => {
     setListRefreshKey((k) => k + 1)
@@ -292,75 +329,178 @@ export default function UnparsedEmails() {
     return copy
   }, [filteredRows, sortBy, sortDir])
 
-  const toggleUnparsedSort = useCallback(
-    (key) => {
-      if (sortBy === key) {
-        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-      } else {
-        setSortBy(key)
-        setSortDir(key === UNPARSED_SORT.received ? 'desc' : 'asc')
-      }
+  const setListFilter = useCallback(
+    (paramKey, value) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          if (!value || value === FILTER_ALL) sp.delete(paramKey)
+          else sp.set(paramKey, value)
+          return sp
+        },
+        { replace: true },
+      )
     },
-    [sortBy],
+    [setSearchParams],
   )
 
+  const toggleUnparsedSort = useCallback(
+    (key) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          const cur = parseSortParam(sp)
+          let nextBy = key
+          let nextDir =
+            key === UNPARSED_SORT.received ? 'desc' : 'asc'
+          if (cur.sortBy === key) {
+            nextDir = cur.sortDir === 'asc' ? 'desc' : 'asc'
+          }
+          if (isDefaultUnparsedSort(nextBy, nextDir)) sp.delete(UNPARSED_Q.sort)
+          else sp.set(UNPARSED_Q.sort, `${nextBy}:${nextDir}`)
+          return sp
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
+  // Only prune invalid filter params after the list has loaded. While `rows` is still
+  // empty, option sets are empty too — otherwise we'd strip URL filters on every refresh.
   useEffect(() => {
+    if (status !== 'success') return
     if (
       filterClassification &&
       filterClassification !== FILTER_NONE &&
       !classificationFilterOptions.values.includes(filterClassification)
     ) {
-      setFilterClassification(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.classification)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterClassification, classificationFilterOptions.values])
+  }, [
+    status,
+    filterClassification,
+    classificationFilterOptions.values,
+    setSearchParams,
+  ])
 
   useEffect(() => {
+    if (status !== 'success') return
     if (
       filterParser &&
       filterParser !== FILTER_NONE &&
       filterParser !== FILTER_PARSER_NON_NULL &&
       !parserFilterOptions.values.includes(filterParser)
     ) {
-      setFilterParser(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.parser)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterParser, parserFilterOptions.values])
+  }, [status, filterParser, parserFilterOptions.values, setSearchParams])
 
   useEffect(() => {
+    if (status !== 'success') return
     if (filterClassification === FILTER_NONE && !classificationFilterOptions.hasEmpty) {
-      setFilterClassification(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.classification)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterClassification, classificationFilterOptions.hasEmpty])
+  }, [
+    status,
+    filterClassification,
+    classificationFilterOptions.hasEmpty,
+    setSearchParams,
+  ])
 
   useEffect(() => {
+    if (status !== 'success') return
     if (filterParser === FILTER_NONE && !parserFilterOptions.hasEmpty) {
-      setFilterParser(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.parser)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterParser, parserFilterOptions.hasEmpty])
+  }, [status, filterParser, parserFilterOptions.hasEmpty, setSearchParams])
 
   useEffect(() => {
+    if (status !== 'success') return
     if (filterParser === FILTER_PARSER_NON_NULL && !parserFilterOptions.hasNonNull) {
-      setFilterParser(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.parser)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterParser, parserFilterOptions.hasNonNull])
+  }, [status, filterParser, parserFilterOptions.hasNonNull, setSearchParams])
 
   useEffect(() => {
+    if (status !== 'success') return
     if (
       filterWhyNotParsed &&
       filterWhyNotParsed !== FILTER_NONE &&
       !whyNotParsedFilterOptions.values.includes(filterWhyNotParsed)
     ) {
-      setFilterWhyNotParsed(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.whyNotParsed)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterWhyNotParsed, whyNotParsedFilterOptions.values])
+  }, [
+    status,
+    filterWhyNotParsed,
+    whyNotParsedFilterOptions.values,
+    setSearchParams,
+  ])
 
   useEffect(() => {
+    if (status !== 'success') return
     if (
       filterWhyNotParsed === FILTER_NONE &&
       !whyNotParsedFilterOptions.hasEmpty
     ) {
-      setFilterWhyNotParsed(FILTER_ALL)
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete(UNPARSED_Q.whyNotParsed)
+          return sp
+        },
+        { replace: true },
+      )
     }
-  }, [filterWhyNotParsed, whyNotParsedFilterOptions.hasEmpty])
+  }, [
+    status,
+    filterWhyNotParsed,
+    whyNotParsedFilterOptions.hasEmpty,
+    setSearchParams,
+  ])
 
   const uiQueueId =
     uiDetailKey && /^\d+$/.test(uiDetailKey) ? Number(uiDetailKey) : null
@@ -391,7 +531,18 @@ export default function UnparsedEmails() {
                   label="Search subject"
                   placeholder="Type to filter by subject…"
                   value={subjectQuery}
-                  onChange={(e) => setSubjectQuery(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setSearchParams(
+                      (prev) => {
+                        const sp = new URLSearchParams(prev)
+                        if (!v.trim()) sp.delete(UNPARSED_Q.subject)
+                        else sp.set(UNPARSED_Q.subject, v)
+                        return sp
+                      },
+                      { replace: true },
+                    )
+                  }}
                   sx={{
                     flex: '1 1 200px',
                     minWidth: { xs: '100%', sm: 200 },
@@ -410,7 +561,9 @@ export default function UnparsedEmails() {
                     id="unparsed-filter-whynot"
                     value={filterWhyNotParsed}
                     label="Why Not Parsed"
-                    onChange={(e) => setFilterWhyNotParsed(e.target.value)}
+                    onChange={(e) =>
+                      setListFilter(UNPARSED_Q.whyNotParsed, e.target.value)
+                    }
                   >
                     <MenuItem value={FILTER_ALL}>
                       <em>All</em>
@@ -446,7 +599,9 @@ export default function UnparsedEmails() {
                     id="unparsed-filter-classification"
                     value={filterClassification}
                     label="Classification"
-                    onChange={(e) => setFilterClassification(e.target.value)}
+                    onChange={(e) =>
+                      setListFilter(UNPARSED_Q.classification, e.target.value)
+                    }
                   >
                     <MenuItem value={FILTER_ALL}>
                       <em>All</em>
@@ -474,7 +629,9 @@ export default function UnparsedEmails() {
                     id="unparsed-filter-parser"
                     value={filterParser}
                     label="Parser"
-                    onChange={(e) => setFilterParser(e.target.value)}
+                    onChange={(e) =>
+                      setListFilter(UNPARSED_Q.parser, e.target.value)
+                    }
                   >
                     <MenuItem value={FILTER_ALL}>
                       <em>All</em>
@@ -690,15 +847,17 @@ export default function UnparsedEmails() {
         <DialogTitle>Source Email</DialogTitle>
         <DialogContent dividers>
           {uiDetailKey ? (
-            <EmailSourcePanel
-              mailId={uiQueueId != null ? undefined : uiDetailKey}
-              unparsedMessageId={uiQueueId ?? undefined}
-              active
-              onNotify={(message) => setSnack({ open: true, message })}
-              showReprocessButton={false}
-              onBindOpenReprocessConfirm={bindOpenReprocessConfirm}
-              onReprocessSuccess={onReprocessSuccess}
-            />
+            <Box sx={{ pb: 3 }}>
+              <EmailSourcePanel
+                mailId={uiQueueId != null ? undefined : uiDetailKey}
+                unparsedMessageId={uiQueueId ?? undefined}
+                active
+                onNotify={(message) => setSnack({ open: true, message })}
+                showReprocessButton={false}
+                onBindOpenReprocessConfirm={bindOpenReprocessConfirm}
+                onReprocessSuccess={onReprocessSuccess}
+              />
+            </Box>
           ) : (
             <Typography variant="body2" color="text.secondary">
               No email selected.

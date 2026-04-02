@@ -274,6 +274,45 @@ describe('UnparsedEmails', () => {
     expect(screen.getByText('Beta receipt')).toBeInTheDocument()
   })
 
+  it('restores subject filter from the URL on load', async () => {
+    vi.mocked(listUnparsedEmails).mockResolvedValue([
+      {
+        id: 20,
+        mail_id: 'x',
+        subject: 'Alpha invoice',
+        mail_received_at: null,
+        classification_name: 'C',
+        parser_name: 'P',
+        reason: 'r',
+        fetched_email_id: 1,
+        created_at: '2024-06-01T12:00:00Z',
+      },
+      {
+        id: 21,
+        mail_id: 'y',
+        subject: 'Beta receipt',
+        mail_received_at: null,
+        classification_name: 'C',
+        parser_name: 'P',
+        reason: 'r',
+        fetched_email_id: 2,
+        created_at: '2024-06-01T12:00:00Z',
+      },
+    ])
+
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/emails/unparsed?q=beta']}>
+        <Routes>
+          <Route path="/emails/unparsed" element={<UnparsedEmails />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Beta receipt')).toBeInTheDocument()
+    expect(screen.queryByText('Alpha invoice')).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Search subject/i)).toHaveValue('beta')
+  })
+
   it('Parser filter "(Has Parser)" shows only rows with a parser', async () => {
     vi.mocked(listUnparsedEmails).mockResolvedValue([
       {

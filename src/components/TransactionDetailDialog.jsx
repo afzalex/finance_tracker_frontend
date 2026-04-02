@@ -105,6 +105,7 @@ export default function TransactionDetailDialog({
               sx={{
                 visibility: detailTab === 'transaction' ? 'visible' : 'hidden',
                 pointerEvents: detailTab === 'transaction' ? 'auto' : 'none',
+                pb: 3,
               }}
             >
               <DetailLine label="ID" value={tx.id} />
@@ -142,6 +143,7 @@ export default function TransactionDetailDialog({
                 position: 'absolute',
                 inset: 0,
                 overflow: 'auto',
+                pb: 3,
                 visibility: detailTab === 'email' ? 'visible' : 'hidden',
                 pointerEvents: detailTab === 'email' ? 'auto' : 'none',
               }}

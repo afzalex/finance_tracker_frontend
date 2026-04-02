@@ -79,6 +79,31 @@ const TX_SORT_API = {
   [TX_SORT_COL.amount]: 'amount',
 }
 
+/** List view query keys (persisted in the URL). */
+const TX_Q = {
+  q: 'q',
+  provider: 'provider',
+  direction: 'direction',
+  sort: 'sort',
+}
+
+function parseTxSortParam(sp) {
+  const raw = sp.get(TX_Q.sort)
+  const defaults = { sortBy: TX_SORT_COL.date, sortDir: 'desc' }
+  if (!raw) return defaults
+  const i = raw.lastIndexOf(':')
+  if (i < 1) return defaults
+  const by = raw.slice(0, i)
+  const dir = raw.slice(i + 1)
+  if (!Object.values(TX_SORT_COL).includes(by)) return defaults
+  if (dir !== 'asc' && dir !== 'desc') return defaults
+  return { sortBy: by, sortDir: dir }
+}
+
+function isDefaultTxSort(sortBy, sortDir) {
+  return sortBy === TX_SORT_COL.date && sortDir === 'desc'
+}
+
 export default function Transactions() {
   const navigate = useNavigate()
   const params = useParams()
@@ -87,22 +112,44 @@ export default function Transactions() {
   const routeTransactionId = params.transactionId ? String(params.transactionId) : null
   const tabParam = String(searchParams.get('tab') ?? '').toLowerCase()
 
-  const [query, setQuery] = useState('')
-  const [providerFilter, setProviderFilter] = useState('')
-  const [directionFilter, setDirectionFilter] = useState('')
-  const [page, setPage] = useState(() => {
+  const query = searchParams.get(TX_Q.q) ?? ''
+  const providerFilter = searchParams.get(TX_Q.provider) ?? ''
+  const directionFilter = searchParams.get(TX_Q.direction) ?? ''
+  const page = useMemo(() => {
     const n = Number(searchParams.get('page'))
     return Number.isFinite(n) && n >= 0 ? n : 0
-  })
-  const [rowsPerPage, setRowsPerPage] = useState(() => {
+  }, [searchParams])
+  const rowsPerPage = useMemo(() => {
     const n = Number(searchParams.get('ps'))
     return Number.isFinite(n) && n > 0 ? n : 25
-  })
+  }, [searchParams])
+  const { sortBy, sortDir } = useMemo(
+    () => parseTxSortParam(searchParams),
+    [searchParams],
+  )
+
   const [selectedRow, setSelectedRow] = useState(null)
   const suppressRouteOpenRef = useRef(false)
   const [snack, setSnack] = useState({ open: false, message: '' })
-  const [sortBy, setSortBy] = useState(TX_SORT_COL.date)
-  const [sortDir, setSortDir] = useState('desc')
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev)
+        let changed = false
+        if (!sp.has('page')) {
+          sp.set('page', '0')
+          changed = true
+        }
+        if (!sp.has('ps')) {
+          sp.set('ps', '25')
+          changed = true
+        }
+        return changed ? sp : prev
+      },
+      { replace: true },
+    )
+  }, [setSearchParams])
 
   const distinctKey = 'transactions:distinct-catalog'
   const {
@@ -111,7 +158,21 @@ export default function Transactions() {
     error: distinctError,
   } = useResource(distinctKey, () => listTransactionDistinctCatalog())
 
-  const resourceKey = `transactions:${query}:${providerFilter}:${directionFilter}:${page}:${rowsPerPage}:${sortBy}:${sortDir}`
+  // Normalize page/ps into the key so the first paint matches post-hydration URL (avoids two
+  // useResource stores when `page`/`ps` are injected by the effect below).
+  const listSearchKey = useMemo(
+    () =>
+      JSON.stringify({
+        q: searchParams.get(TX_Q.q) ?? '',
+        provider: searchParams.get(TX_Q.provider) ?? '',
+        direction: searchParams.get(TX_Q.direction) ?? '',
+        sort: searchParams.get(TX_Q.sort) ?? '',
+        page,
+        rowsPerPage,
+      }),
+    [searchParams, page, rowsPerPage],
+  )
+  const resourceKey = `transactions:${listSearchKey}`
   const { status, data, error } = useResource(resourceKey, () =>
     listTransactions({
       query,
@@ -126,53 +187,34 @@ export default function Transactions() {
 
   const toggleTxSort = useCallback(
     (key) => {
-      if (sortBy === key) {
-        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-      } else {
-        setSortBy(key)
-        setSortDir(
-          key === TX_SORT_COL.date || key === TX_SORT_COL.amount ? 'desc' : 'asc',
-        )
-        setPage(0)
-      }
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          const cur = parseTxSortParam(sp)
+          let nextBy = key
+          let nextDir = cur.sortDir
+          if (cur.sortBy === key) {
+            nextDir = cur.sortDir === 'asc' ? 'desc' : 'asc'
+          } else {
+            nextBy = key
+            nextDir =
+              key === TX_SORT_COL.date || key === TX_SORT_COL.amount
+                ? 'desc'
+                : 'asc'
+            sp.set('page', '0')
+          }
+          if (isDefaultTxSort(nextBy, nextDir)) sp.delete(TX_Q.sort)
+          else sp.set(TX_Q.sort, `${nextBy}:${nextDir}`)
+          return sp
+        },
+        { replace: true },
+      )
     },
-    [sortBy],
+    [setSearchParams],
   )
 
   const rows = useMemo(() => data?.items ?? [], [data])
   const total = data?.total ?? 0
-
-  useEffect(() => {
-    // Keep page + page size in the URL (but avoid syncing other state).
-    setSearchParams((prev) => {
-      const sp = new URLSearchParams(prev)
-      sp.set('ps', String(rowsPerPage))
-      sp.set('page', String(page))
-      return sp
-    }, { replace: true })
-  }, [page, rowsPerPage, setSearchParams])
-
-  useEffect(() => {
-    // If user edits page/ps in the URL (or uses Back/Forward), reflect it in state.
-    const psFromUrl = Number(searchParams.get('ps'))
-    const pageFromUrl = Number(searchParams.get('page'))
-
-    const nextPs =
-      Number.isFinite(psFromUrl) && psFromUrl > 0 ? psFromUrl : rowsPerPage
-    const nextPage =
-      Number.isFinite(pageFromUrl) && pageFromUrl >= 0 ? pageFromUrl : page
-
-    if (nextPs !== rowsPerPage) {
-      setRowsPerPage(nextPs)
-      setPage(0)
-      return
-    }
-
-    if (nextPage !== page) {
-      setPage(nextPage)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
 
   useEffect(() => {
     // Once the URL no longer points at a specific transaction, allow auto-open again.
@@ -238,25 +280,41 @@ export default function Transactions() {
   ])
 
   const handleQueryChange = (e) => {
-    setQuery(e.target.value)
-    setPage(0)
+    const v = e.target.value
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev)
+        if (!v.trim()) sp.delete(TX_Q.q)
+        else sp.set(TX_Q.q, v)
+        sp.set('page', '0')
+        return sp
+      },
+      { replace: true },
+    )
   }
 
   const providerOptions = distinctData?.providers ?? []
 
-  const openDetail = (
-    row,
-    nextTab = tabParam === 'email' ? 'email' : 'transaction',
-  ) =>
-    navigate(
-      `/transactions/${row.id}?tab=${nextTab}&ps=${rowsPerPage}&page=${page}`,
-    )
+  const openDetail = useCallback(
+    (
+      row,
+      nextTab = tabParam === 'email' ? 'email' : 'transaction',
+    ) => {
+      const sp = new URLSearchParams(searchParams)
+      sp.set('tab', nextTab)
+      navigate(`/transactions/${row.id}?${sp.toString()}`)
+    },
+    [navigate, searchParams, tabParam],
+  )
 
-  const closeDetail = () => {
+  const closeDetail = useCallback(() => {
     suppressRouteOpenRef.current = true
-    navigate(`/transactions?ps=${rowsPerPage}&page=${page}`)
+    const sp = new URLSearchParams(searchParams)
+    sp.delete('tab')
+    const qs = sp.toString()
+    navigate(qs ? `/transactions?${qs}` : '/transactions')
     setSelectedRow(null)
-  }
+  }, [navigate, searchParams])
 
   const detailTab = tabParam === 'email' ? 'email' : 'transaction'
 
@@ -286,8 +344,17 @@ export default function Transactions() {
             label="Provider"
             value={providerFilter}
             onChange={(e) => {
-              setProviderFilter(e.target.value)
-              setPage(0)
+              const v = e.target.value
+              setSearchParams(
+                (prev) => {
+                  const sp = new URLSearchParams(prev)
+                  if (!v) sp.delete(TX_Q.provider)
+                  else sp.set(TX_Q.provider, v)
+                  sp.set('page', '0')
+                  return sp
+                },
+                { replace: true },
+              )
             }}
           >
             <MenuItem value="">
@@ -307,8 +374,17 @@ export default function Transactions() {
             label="Direction"
             value={directionFilter}
             onChange={(e) => {
-              setDirectionFilter(e.target.value)
-              setPage(0)
+              const v = e.target.value
+              setSearchParams(
+                (prev) => {
+                  const sp = new URLSearchParams(prev)
+                  if (!v) sp.delete(TX_Q.direction)
+                  else sp.set(TX_Q.direction, v)
+                  sp.set('page', '0')
+                  return sp
+                },
+                { replace: true },
+              )
             }}
           >
             <MenuItem value="">
@@ -494,11 +570,28 @@ export default function Transactions() {
                 component="div"
                 count={total}
                 page={page}
-                onPageChange={(_, newPage) => setPage(newPage)}
+                onPageChange={(_, newPage) => {
+                  setSearchParams(
+                    (prev) => {
+                      const sp = new URLSearchParams(prev)
+                      sp.set('page', String(newPage))
+                      return sp
+                    },
+                    { replace: true },
+                  )
+                }}
                 rowsPerPage={rowsPerPage}
                 onRowsPerPageChange={(e) => {
-                  setRowsPerPage(Number.parseInt(e.target.value, 10))
-                  setPage(0)
+                  const n = Number.parseInt(e.target.value, 10)
+                  setSearchParams(
+                    (prev) => {
+                      const sp = new URLSearchParams(prev)
+                      sp.set('ps', String(n))
+                      sp.set('page', '0')
+                      return sp
+                    },
+                    { replace: true },
+                  )
                 }}
                 rowsPerPageOptions={[10, 25, 50, 75, 100]}
               />

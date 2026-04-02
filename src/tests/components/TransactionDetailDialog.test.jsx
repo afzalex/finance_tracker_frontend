@@ -205,6 +205,79 @@ describe('TransactionDetailDialog', () => {
     )
   })
 
+  it('shows Create parser link when enrichment has no parser', async () => {
+    vi.mocked(getFetchedEmailByMailId).mockResolvedValue({
+      mail_id: 'gmail-msg-abc',
+      subject: 'S',
+      sender: null,
+      snippet: null,
+      internal_date_ms: null,
+      created_at: '2024-06-01T12:00:00Z',
+      body_text: 'x',
+      enrichment: {
+        classification_name: 'transaction',
+        classification: 'TRANSACTION_ALERT',
+        classification_id: 12,
+        parser_name: null,
+        parser_id: null,
+        updated_at: '2024-06-02T00:00:00Z',
+      },
+    })
+
+    const user = userEvent.setup()
+    const fromPath = '/transactions/99?tab=email&page=0&ps=25'
+    renderWithRouter(
+      <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
+      { initialEntries: [fromPath] },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Create parser' })).toBeInTheDocument()
+    })
+    const expectedCreateParserTo = `/settings/rules/parsers/new?tab=parsers&returnTo=${encodeURIComponent(fromPath)}`
+    expect(screen.getByRole('link', { name: 'Create parser' })).toHaveAttribute(
+      'href',
+      expectedCreateParserTo,
+    )
+    expect(screen.getByText('No Parser Found')).toBeInTheDocument()
+  })
+
+  it('does not show Create parser when classification is not transaction alert', async () => {
+    vi.mocked(getFetchedEmailByMailId).mockResolvedValue({
+      mail_id: 'gmail-msg-abc',
+      subject: 'S',
+      sender: null,
+      snippet: null,
+      internal_date_ms: null,
+      created_at: '2024-06-01T12:00:00Z',
+      body_text: 'x',
+      enrichment: {
+        classification_name: 'statement',
+        classification: 'STATEMENT',
+        classification_id: 5,
+        parser_name: null,
+        parser_id: null,
+        updated_at: '2024-06-02T00:00:00Z',
+      },
+    })
+
+    const user = userEvent.setup()
+    renderWithRouter(
+      <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
+      { initialEntries: ['/transactions/99'] },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('statement')).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('link', { name: 'Create parser' })).not.toBeInTheDocument()
+    expect(screen.queryByText('No Parser Found')).not.toBeInTheDocument()
+  })
+
   it('calls onClose when Close is clicked', async () => {
     const onClose = vi.fn()
     const user = userEvent.setup()

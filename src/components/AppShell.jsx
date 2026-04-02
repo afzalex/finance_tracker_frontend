@@ -74,7 +74,7 @@ export default function AppShell() {
             Finance Tracker
           </Typography>
           <Typography variant="body2" color="inherit" sx={{ opacity: 0.8 }}>
-            Mock UI
+            Made by <a href="https://www.afzalex.com/" rel="noopener noreferrer">Mohammad Afzal</a>
           </Typography>
         </Toolbar>
       </AppBar>

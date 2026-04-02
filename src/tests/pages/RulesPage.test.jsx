@@ -94,6 +94,11 @@ describe('RulesPage', () => {
       <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
         <Routes>
           <Route path="/settings/rules" element={<RulesPage />} />
+          <Route
+            path="/settings/rules/classifications/:classificationId"
+            element={<RulesPage />}
+          />
+          <Route path="/settings/rules/parsers/:parserId" element={<RulesPage />} />
         </Routes>
       </MemoryRouter>,
     )

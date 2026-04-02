@@ -23,25 +23,32 @@ export default function RulesPage() {
   const classificationIdParam = params.classificationId
   const parserIdParam = params.parserId
 
+  const routeClassificationNew = classificationIdParam === 'new'
+  const routeParserNew = parserIdParam === 'new'
+
   const routeClassificationId = useMemo(() => {
+    if (routeClassificationNew) return null
     const n = Number(classificationIdParam)
     return Number.isFinite(n) ? n : null
-  }, [classificationIdParam])
+  }, [classificationIdParam, routeClassificationNew])
 
   const routeParserId = useMemo(() => {
+    if (routeParserNew) return null
     const n = Number(parserIdParam)
     return Number.isFinite(n) ? n : null
-  }, [parserIdParam])
+  }, [parserIdParam, routeParserNew])
 
-  const forcedTab = routeClassificationId != null ? 0 : routeParserId != null ? 1 : null
+  const forcedTab =
+    routeClassificationId != null || routeClassificationNew
+      ? 0
+      : routeParserId != null || routeParserNew
+        ? 1
+        : null
 
   const [tab, setTab] = useState(0)
   const [classificationsShowInactive, setClassificationsShowInactive] =
     useState(false)
   const [parsersShowInactive, setParsersShowInactive] = useState(false)
-  const [classificationsCreateRequestId, setClassificationsCreateRequestId] =
-    useState(0)
-  const [parsersCreateRequestId, setParsersCreateRequestId] = useState(0)
 
   useEffect(() => {
     if (forcedTab != null) {
@@ -59,14 +66,25 @@ export default function RulesPage() {
     tab === 0 ? setClassificationsShowInactive : setParsersShowInactive
 
   const triggerCreate = () => {
-    if (tab === 0) setClassificationsCreateRequestId((x) => x + 1)
-    else setParsersCreateRequestId((x) => x + 1)
+    const sp = new URLSearchParams(searchParams)
+    if (tab === 0) {
+      sp.set('tab', 'classifications')
+      navigate(`/settings/rules/classifications/new?${sp.toString()}`)
+    } else {
+      sp.set('tab', 'parsers')
+      navigate(`/settings/rules/parsers/new?${sp.toString()}`)
+    }
   }
 
   const setTabAndUrl = (nextTab) => {
     setTab(nextTab)
     const next = nextTab === 1 ? 'parsers' : 'classifications'
-    if (routeClassificationId != null || routeParserId != null) {
+    if (
+      routeClassificationId != null ||
+      routeParserId != null ||
+      routeClassificationNew ||
+      routeParserNew
+    ) {
       const sp = new URLSearchParams(searchParams)
       sp.set('tab', next)
       navigate(`/settings/rules?${sp.toString()}`)
@@ -151,16 +169,16 @@ export default function RulesPage() {
           {tab === 0 ? (
             <ClassificationsSection
               showInactive={classificationsShowInactive}
-              createRequestId={classificationsCreateRequestId}
               routeId={routeClassificationId}
+              routeCreate={routeClassificationNew}
               onOpenRule={openClassificationById}
               onCloseRule={closeClassificationRoute}
             />
           ) : (
             <ParsersSection
               showInactive={parsersShowInactive}
-              createRequestId={parsersCreateRequestId}
               routeId={routeParserId}
+              routeCreate={routeParserNew}
               onOpenRule={openParserById}
               onCloseRule={closeParserRoute}
             />

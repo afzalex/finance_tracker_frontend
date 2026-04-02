@@ -140,6 +140,48 @@ describe('Transactions', () => {
     })
   })
 
+  it('restores search filter from the URL on load', async () => {
+    financeApi.listTransactions.mockResolvedValueOnce({
+      items: [
+        {
+          id: '2',
+          date: '2023-10-02T12:00:00Z',
+          description: 'Coffee',
+          account: 'Checking',
+          merchant: 'Starbucks',
+          provider: 'Plaid',
+          amount: -5,
+          amountRaw: '-$5.00',
+          raw: { merchant: 'Starbucks' },
+        },
+      ],
+      total: 1,
+    })
+
+    renderWithTheme(
+      <MemoryRouter initialEntries={['/transactions?q=Starbucks']}>
+        <Routes>
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/transactions/:transactionId" element={<Transactions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(financeApi.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: 'Starbucks',
+          page: 1,
+          pageSize: 25,
+        }),
+      )
+    })
+    expect(
+      screen.getByPlaceholderText('Search merchant or payee…'),
+    ).toHaveValue('Starbucks')
+    expect(await screen.findByText('Coffee')).toBeInTheDocument()
+  })
+
   it('renders API error message', async () => {
     financeApi.listTransactions.mockRejectedValueOnce(new Error('Transaction fetch failed'))
 
