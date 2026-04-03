@@ -22,7 +22,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AccountType as ApiAccountType,
@@ -39,7 +39,6 @@ import {
   listParsers,
   patchParser,
 } from '../../services/rulesApi'
-import { formatDateTime } from '../../utils/format'
 import { leaveReturnCopy, parseSafeReturnToParam } from '../../utils/safeReturnTo'
 
 function nullableString(v) {
@@ -52,6 +51,43 @@ function toNullableNumber(v) {
   if (s === '') return null
   const n = Number(s)
   return Number.isFinite(n) ? n : null
+}
+
+/** Persisted in URL on the rules page (same pattern as transactions `sort`). */
+const PRC_SORT_Q = 'p_sort'
+
+const PRC_SORT_COL = {
+  id: 'id',
+  label: 'label',
+  name: 'name',
+  priority: 'priority',
+  mail_count: 'mail_count',
+  status: 'status',
+}
+
+const PRC_SORT_FIELDS = Object.values(PRC_SORT_COL)
+
+function parseParsersSortParam(sp) {
+  const raw = sp.get(PRC_SORT_Q)
+  const defaults = { sortBy: PRC_SORT_COL.id, sortDir: 'asc' }
+  if (!raw) return defaults
+  const i = raw.lastIndexOf(':')
+  if (i < 1) return defaults
+  let by = raw.slice(0, i)
+  const dir = raw.slice(i + 1)
+  if (by === 'updated_at') by = PRC_SORT_COL.mail_count
+  if (!PRC_SORT_FIELDS.includes(by)) return defaults
+  if (dir !== 'asc' && dir !== 'desc') return defaults
+  return { sortBy: by, sortDir: dir }
+}
+
+function isDefaultParsersSort(sortBy, sortDir) {
+  return sortBy === PRC_SORT_COL.id && sortDir === 'asc'
+}
+
+function defaultDirForParsersSortKey(key) {
+  if (key === PRC_SORT_COL.mail_count || key === PRC_SORT_COL.priority) return 'desc'
+  return 'asc'
 }
 
 export default function ParsersSection({
@@ -75,8 +111,10 @@ export default function ParsersSection({
   const resourceKey = `rules:parsers:${showInactive}:${refreshKey}`
   const { status, data, error } = useResource(resourceKey, () => listParsers())
 
-  const [sortBy, setSortBy] = useState('id')
-  const [sortDir, setSortDir] = useState('asc')
+  const { sortBy, sortDir } = useMemo(
+    () => parseParsersSortParam(searchParams),
+    [searchParams],
+  )
 
   const parsers = useMemo(() => {
     const items = data ?? []
@@ -88,24 +126,48 @@ export default function ParsersSection({
     const dir = sortDir === 'asc' ? 1 : -1
     const copy = [...parsers]
     copy.sort((a, b) => {
-      if (sortBy === 'id') return (a.id - b.id) * dir
-      if (sortBy === 'name') return String(a.name ?? '').localeCompare(String(b.name ?? '')) * dir
-      if (sortBy === 'label') return String(a.label ?? '').localeCompare(String(b.label ?? '')) * dir
-      if (sortBy === 'priority') return ((a.priority ?? 0) - (b.priority ?? 0)) * dir
-      if (sortBy === 'updated_at') return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir
+      if (sortBy === PRC_SORT_COL.id) return (a.id - b.id) * dir
+      if (sortBy === PRC_SORT_COL.name)
+        return String(a.name ?? '').localeCompare(String(b.name ?? '')) * dir
+      if (sortBy === PRC_SORT_COL.label)
+        return String(a.label ?? '').localeCompare(String(b.label ?? '')) * dir
+      if (sortBy === PRC_SORT_COL.priority)
+        return ((a.priority ?? 0) - (b.priority ?? 0)) * dir
+      if (sortBy === PRC_SORT_COL.mail_count)
+        return ((a.mail_count ?? 0) - (b.mail_count ?? 0)) * dir
+      if (sortBy === PRC_SORT_COL.status) {
+        const ra = a.is_active ? 0 : 1
+        const rb = b.is_active ? 0 : 1
+        return (ra - rb) * dir
+      }
       return 0
     })
     return copy
   }, [parsers, sortBy, sortDir])
 
-  const toggleSort = (key) => {
-    if (sortBy === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortBy(key)
-    setSortDir('asc')
-  }
+  const toggleSort = useCallback(
+    (key) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          const cur = parseParsersSortParam(sp)
+          let nextBy = key
+          let nextDir = cur.sortDir
+          if (cur.sortBy === key) {
+            nextDir = cur.sortDir === 'asc' ? 'desc' : 'asc'
+          } else {
+            nextBy = key
+            nextDir = defaultDirForParsersSortKey(key)
+          }
+          if (isDefaultParsersSort(nextBy, nextDir)) sp.delete(PRC_SORT_Q)
+          else sp.set(PRC_SORT_Q, `${nextBy}:${nextDir}`)
+          return sp
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   const [dialog, setDialog] = useState({
     open: false,
@@ -153,7 +215,6 @@ export default function ParsersSection({
   })
 
   const handleLeaveReturnStay = () => {
-    const variant = leaveReturnDialog.variant
     const snack = leaveReturnDialog.staySnack
     setLeaveReturnDialog({
       open: false,
@@ -161,12 +222,15 @@ export default function ParsersSection({
       variant: null,
       staySnack: null,
     })
-    if (searchParams.get('returnTo')) {
-      const next = new URLSearchParams(searchParams)
-      next.delete('returnTo')
-      setSearchParams(next, { replace: true })
-    }
-    if (variant === 'dismiss') performCloseDialog()
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (!next.has('returnTo')) return prev
+        next.delete('returnTo')
+        return next
+      },
+      { replace: true },
+    )
     if (snack) setSnack({ open: true, message: snack })
   }
 
@@ -405,47 +469,56 @@ export default function ParsersSection({
             <TableHead>
               <TableRow>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'id' ? sortDir : false}
-                  active={sortBy === 'id'}
-                  direction={sortBy === 'id' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('id')}
+                  sortDirection={sortBy === PRC_SORT_COL.id ? sortDir : false}
+                  active={sortBy === PRC_SORT_COL.id}
+                  direction={sortBy === PRC_SORT_COL.id ? sortDir : 'asc'}
+                  onSort={() => toggleSort(PRC_SORT_COL.id)}
                 >
                   ID
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'label' ? sortDir : false}
-                  active={sortBy === 'label'}
-                  direction={sortBy === 'label' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('label')}
+                  sortDirection={sortBy === PRC_SORT_COL.label ? sortDir : false}
+                  active={sortBy === PRC_SORT_COL.label}
+                  direction={sortBy === PRC_SORT_COL.label ? sortDir : 'asc'}
+                  onSort={() => toggleSort(PRC_SORT_COL.label)}
                 >
                   Label
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'name' ? sortDir : false}
-                  active={sortBy === 'name'}
-                  direction={sortBy === 'name' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('name')}
+                  sortDirection={sortBy === PRC_SORT_COL.name ? sortDir : false}
+                  active={sortBy === PRC_SORT_COL.name}
+                  direction={sortBy === PRC_SORT_COL.name ? sortDir : 'asc'}
+                  onSort={() => toggleSort(PRC_SORT_COL.name)}
                 >
                   Name
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
                   align="right"
-                  sortDirection={sortBy === 'priority' ? sortDir : false}
-                  active={sortBy === 'priority'}
-                  direction={sortBy === 'priority' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('priority')}
+                  sortDirection={sortBy === PRC_SORT_COL.priority ? sortDir : false}
+                  active={sortBy === PRC_SORT_COL.priority}
+                  direction={sortBy === PRC_SORT_COL.priority ? sortDir : 'asc'}
+                  onSort={() => toggleSort(PRC_SORT_COL.priority)}
                 >
                   Priority
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'updated_at' ? sortDir : false}
-                  active={sortBy === 'updated_at'}
-                  direction={sortBy === 'updated_at' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('updated_at')}
+                  align="right"
+                  sortDirection={sortBy === PRC_SORT_COL.mail_count ? sortDir : false}
+                  active={sortBy === PRC_SORT_COL.mail_count}
+                  direction={sortBy === PRC_SORT_COL.mail_count ? sortDir : 'asc'}
+                  onSort={() => toggleSort(PRC_SORT_COL.mail_count)}
                 >
-                  Updated
+                  Mail Count
                 </SortableTableHeaderCell>
-                <TableCell align="right">Status</TableCell>
+                <SortableTableHeaderCell
+                  align="right"
+                  sortDirection={sortBy === PRC_SORT_COL.status ? sortDir : false}
+                  active={sortBy === PRC_SORT_COL.status}
+                  direction={sortBy === PRC_SORT_COL.status ? sortDir : 'asc'}
+                  onSort={() => toggleSort(PRC_SORT_COL.status)}
+                >
+                  Status
+                </SortableTableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -470,19 +543,23 @@ export default function ParsersSection({
                   aria-label={`Edit parser ${p.name}`}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{p.id}</TableCell>
-                  <TableCell sx={{ maxWidth: 220 }}>
+                  <TableCell align="left" sx={{ whiteSpace: 'nowrap' }}>
+                    {p.id}
+                  </TableCell>
+                  <TableCell align="left" sx={{ maxWidth: 220 }}>
                     <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                       {p.label}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={{ maxWidth: 260 }}>
+                  <TableCell align="left" sx={{ maxWidth: 260 }}>
                     <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                       {p.name}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">{p.priority}</TableCell>
-                  <TableCell>{formatDateTime(p.updated_at)}</TableCell>
+                  <TableCell align="right">
+                    {p.mail_count != null ? p.mail_count : '—'}
+                  </TableCell>
                   <TableCell align="right">
                     <Chip
                       size="small"

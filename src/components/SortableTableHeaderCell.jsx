@@ -1,11 +1,6 @@
-import { TableCell, TableSortLabel } from '@mui/material'
+import { Box, TableCell, TableSortLabel } from '@mui/material'
 import { tableSortLabelClasses } from '@mui/material/TableSortLabel'
 
-/**
- * Full-cell sort header: click / Enter / Space anywhere on the cell (including padding) sorts.
- * Sort is handled on the cell; clicks on the label bubble up. Cell hover mirrors MUI’s inactive
- * TableSortLabel hover (faded sort icon) so it works over padding too.
- */
 export default function SortableTableHeaderCell({
   active,
   direction,
@@ -15,9 +10,17 @@ export default function SortableTableHeaderCell({
   align,
   sx,
 }) {
+  const cellAlign = align ?? 'left'
+
+  const sortLabel = (
+    <TableSortLabel active={active} direction={direction} component="span">
+      {children}
+    </TableSortLabel>
+  )
+
   return (
     <TableCell
-      align={align}
+      align={cellAlign}
       sortDirection={sortDirection}
       onClick={onSort}
       onKeyDown={(e) => {
@@ -43,18 +46,20 @@ export default function SortableTableHeaderCell({
         ...(Array.isArray(sx) ? sx : sx != null ? [sx] : []),
       ]}
     >
-      <TableSortLabel
-        active={active}
-        direction={direction}
-        component="span"
-        sx={{
-          width: '100%',
-          display: 'inline-flex',
-          ...(align === 'right' ? { justifyContent: 'flex-end' } : {}),
-        }}
-      >
-        {children}
-      </TableSortLabel>
+      {cellAlign === 'right' ? (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            width: '100%',
+          }}
+        >
+          {sortLabel}
+        </Box>
+      ) : (
+        sortLabel
+      )}
     </TableCell>
   )
 }

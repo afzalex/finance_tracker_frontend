@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { AppBar, Box, Toolbar, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import useAppMeta from '../contexts/useAppMeta'
 
 export default function RootLayout() {
@@ -13,11 +14,6 @@ export default function RootLayout() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Finance Tracker
           </Typography>
-          {meta?.mail_user_email ? (
-            <Typography variant="body2" color="inherit" sx={{ opacity: 0.85 }}>
-              Connected: {meta.mail_user_email}
-            </Typography>
-          ) : null}
         </Toolbar>
       </AppBar>
 
@@ -28,7 +24,7 @@ export default function RootLayout() {
 
       <Box
         component="footer"
-        sx={{
+        sx={(theme) => ({
           position: 'fixed',
           left: 0,
           right: 0,
@@ -36,16 +32,25 @@ export default function RootLayout() {
           height: `${footerH}px`,
           display: 'flex',
           alignItems: 'center',
-          borderTop: '1px solid',
-          borderColor: 'divider',
+          justifyContent: 'space-between',
+          gap: 2,
           px: 2,
           color: 'text.secondary',
           typography: 'body2',
-          bgcolor: 'background.paper',
-          zIndex: (t) => t.zIndex.drawer + 1,
-        }}
+          backdropFilter: 'blur(10px)',
+          backgroundColor: alpha(theme.palette.background.default, 0.7),
+          borderTop: `1px solid ${theme.palette.divider}`,
+          zIndex: theme.zIndex.drawer + 1,
+        })}
       >
-        Finance Tracker
+        <Typography variant="body2" color="inherit" component="span">
+          Finance Tracker
+        </Typography>
+        {meta?.mail_user_email ? (
+          <Typography variant="body2" color="inherit" sx={{ opacity: 0.85 }}>
+            Connected: {meta.mail_user_email}
+          </Typography>
+        ) : null}
       </Box>
     </Box>
   )

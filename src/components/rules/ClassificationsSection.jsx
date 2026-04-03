@@ -22,7 +22,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MessageType as ApiMessageType } from '../../api'
 import useResource from '../../hooks/useResource'
@@ -34,7 +34,6 @@ import {
   listClassifications,
   patchClassification,
 } from '../../services/rulesApi'
-import { formatDateTime } from '../../utils/format'
 import { leaveReturnCopy, parseSafeReturnToParam } from '../../utils/safeReturnTo'
 
 function nullableString(v) {
@@ -47,6 +46,48 @@ function toNullablePriority(v) {
   if (s === '') return null
   const n = Number(s)
   return Number.isFinite(n) ? n : null
+}
+
+/** Persisted in URL on the rules page (same pattern as transactions `sort`). */
+const CLS_SORT_Q = 'c_sort'
+
+const CLS_SORT_COL = {
+  id: 'id',
+  name: 'name',
+  message_type: 'message_type',
+  priority: 'priority',
+  mail_count: 'mail_count',
+  status: 'status',
+}
+
+const CLS_SORT_FIELDS = Object.values(CLS_SORT_COL)
+
+function parseClassificationsSortParam(sp) {
+  const raw = sp.get(CLS_SORT_Q)
+  const defaults = { sortBy: CLS_SORT_COL.id, sortDir: 'asc' }
+  if (!raw) return defaults
+  const i = raw.lastIndexOf(':')
+  if (i < 1) return defaults
+  let by = raw.slice(0, i)
+  const dir = raw.slice(i + 1)
+  if (by === 'updated_at') by = CLS_SORT_COL.mail_count
+  if (!CLS_SORT_FIELDS.includes(by)) return defaults
+  if (dir !== 'asc' && dir !== 'desc') return defaults
+  return { sortBy: by, sortDir: dir }
+}
+
+function isDefaultClassificationsSort(sortBy, sortDir) {
+  return sortBy === CLS_SORT_COL.id && sortDir === 'asc'
+}
+
+function defaultDirForClassificationsSortKey(key) {
+  if (
+    key === CLS_SORT_COL.mail_count ||
+    key === CLS_SORT_COL.priority
+  ) {
+    return 'desc'
+  }
+  return 'asc'
 }
 
 export default function ClassificationsSection({
@@ -72,8 +113,10 @@ export default function ClassificationsSection({
     listClassifications(),
   )
 
-  const [sortBy, setSortBy] = useState('id')
-  const [sortDir, setSortDir] = useState('asc')
+  const { sortBy, sortDir } = useMemo(
+    () => parseClassificationsSortParam(searchParams),
+    [searchParams],
+  )
 
   const classifications = useMemo(() => {
     const items = data ?? []
@@ -85,23 +128,48 @@ export default function ClassificationsSection({
     const dir = sortDir === 'asc' ? 1 : -1
     const copy = [...classifications]
     copy.sort((a, b) => {
-      if (sortBy === 'id') return (a.id - b.id) * dir
-      if (sortBy === 'name') return String(a.name ?? '').localeCompare(String(b.name ?? '')) * dir
-      if (sortBy === 'priority') return ((a.priority ?? 0) - (b.priority ?? 0)) * dir
-      if (sortBy === 'updated_at') return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * dir
+      if (sortBy === CLS_SORT_COL.id) return (a.id - b.id) * dir
+      if (sortBy === CLS_SORT_COL.name)
+        return String(a.name ?? '').localeCompare(String(b.name ?? '')) * dir
+      if (sortBy === CLS_SORT_COL.message_type)
+        return String(a.message_type ?? '').localeCompare(String(b.message_type ?? '')) * dir
+      if (sortBy === CLS_SORT_COL.priority)
+        return ((a.priority ?? 0) - (b.priority ?? 0)) * dir
+      if (sortBy === CLS_SORT_COL.mail_count)
+        return ((a.mail_count ?? 0) - (b.mail_count ?? 0)) * dir
+      if (sortBy === CLS_SORT_COL.status) {
+        const ra = a.is_active ? 0 : 1
+        const rb = b.is_active ? 0 : 1
+        return (ra - rb) * dir
+      }
       return 0
     })
     return copy
   }, [classifications, sortBy, sortDir])
 
-  const toggleSort = (key) => {
-    if (sortBy === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortBy(key)
-    setSortDir('asc')
-  }
+  const toggleSort = useCallback(
+    (key) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          const cur = parseClassificationsSortParam(sp)
+          let nextBy = key
+          let nextDir = cur.sortDir
+          if (cur.sortBy === key) {
+            nextDir = cur.sortDir === 'asc' ? 'desc' : 'asc'
+          } else {
+            nextBy = key
+            nextDir = defaultDirForClassificationsSortKey(key)
+          }
+          if (isDefaultClassificationsSort(nextBy, nextDir)) sp.delete(CLS_SORT_Q)
+          else sp.set(CLS_SORT_Q, `${nextBy}:${nextDir}`)
+          return sp
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   const [dialog, setDialog] = useState({
     open: false,
@@ -142,7 +210,6 @@ export default function ClassificationsSection({
   })
 
   const handleLeaveReturnStay = () => {
-    const variant = leaveReturnDialog.variant
     const snack = leaveReturnDialog.staySnack
     setLeaveReturnDialog({
       open: false,
@@ -150,12 +217,15 @@ export default function ClassificationsSection({
       variant: null,
       staySnack: null,
     })
-    if (searchParams.get('returnTo')) {
-      const next = new URLSearchParams(searchParams)
-      next.delete('returnTo')
-      setSearchParams(next, { replace: true })
-    }
-    if (variant === 'dismiss') performCloseDialog()
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (!next.has('returnTo')) return prev
+        next.delete('returnTo')
+        return next
+      },
+      { replace: true },
+    )
     if (snack) setSnack({ open: true, message: snack })
   }
 
@@ -381,40 +451,56 @@ export default function ClassificationsSection({
             <TableHead>
               <TableRow>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'id' ? sortDir : false}
-                  active={sortBy === 'id'}
-                  direction={sortBy === 'id' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('id')}
+                  sortDirection={sortBy === CLS_SORT_COL.id ? sortDir : false}
+                  active={sortBy === CLS_SORT_COL.id}
+                  direction={sortBy === CLS_SORT_COL.id ? sortDir : 'asc'}
+                  onSort={() => toggleSort(CLS_SORT_COL.id)}
                 >
                   ID
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'name' ? sortDir : false}
-                  active={sortBy === 'name'}
-                  direction={sortBy === 'name' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('name')}
+                  sortDirection={sortBy === CLS_SORT_COL.name ? sortDir : false}
+                  active={sortBy === CLS_SORT_COL.name}
+                  direction={sortBy === CLS_SORT_COL.name ? sortDir : 'asc'}
+                  onSort={() => toggleSort(CLS_SORT_COL.name)}
                 >
                   Name
                 </SortableTableHeaderCell>
-                <TableCell>Message Type</TableCell>
+                <SortableTableHeaderCell
+                  sortDirection={sortBy === CLS_SORT_COL.message_type ? sortDir : false}
+                  active={sortBy === CLS_SORT_COL.message_type}
+                  direction={sortBy === CLS_SORT_COL.message_type ? sortDir : 'asc'}
+                  onSort={() => toggleSort(CLS_SORT_COL.message_type)}
+                >
+                  Message Type
+                </SortableTableHeaderCell>
                 <SortableTableHeaderCell
                   align="right"
-                  sortDirection={sortBy === 'priority' ? sortDir : false}
-                  active={sortBy === 'priority'}
-                  direction={sortBy === 'priority' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('priority')}
+                  sortDirection={sortBy === CLS_SORT_COL.priority ? sortDir : false}
+                  active={sortBy === CLS_SORT_COL.priority}
+                  direction={sortBy === CLS_SORT_COL.priority ? sortDir : 'asc'}
+                  onSort={() => toggleSort(CLS_SORT_COL.priority)}
                 >
                   Priority
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === 'updated_at' ? sortDir : false}
-                  active={sortBy === 'updated_at'}
-                  direction={sortBy === 'updated_at' ? sortDir : 'asc'}
-                  onSort={() => toggleSort('updated_at')}
+                  align="right"
+                  sortDirection={sortBy === CLS_SORT_COL.mail_count ? sortDir : false}
+                  active={sortBy === CLS_SORT_COL.mail_count}
+                  direction={sortBy === CLS_SORT_COL.mail_count ? sortDir : 'asc'}
+                  onSort={() => toggleSort(CLS_SORT_COL.mail_count)}
                 >
-                  Updated
+                  Mail Count
                 </SortableTableHeaderCell>
-                <TableCell align="right">Status</TableCell>
+                <SortableTableHeaderCell
+                  align="right"
+                  sortDirection={sortBy === CLS_SORT_COL.status ? sortDir : false}
+                  active={sortBy === CLS_SORT_COL.status}
+                  direction={sortBy === CLS_SORT_COL.status ? sortDir : 'asc'}
+                  onSort={() => toggleSort(CLS_SORT_COL.status)}
+                >
+                  Status
+                </SortableTableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -439,15 +525,19 @@ export default function ClassificationsSection({
                   aria-label={`Edit classification ${c.name}`}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{c.id}</TableCell>
-                  <TableCell sx={{ maxWidth: 260 }}>
+                  <TableCell align="left" sx={{ whiteSpace: 'nowrap' }}>
+                    {c.id}
+                  </TableCell>
+                  <TableCell align="left" sx={{ maxWidth: 260 }}>
                     <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
                       {c.name}
                     </Typography>
                   </TableCell>
-                  <TableCell>{c.message_type}</TableCell>
+                  <TableCell align="left">{c.message_type}</TableCell>
                   <TableCell align="right">{c.priority}</TableCell>
-                  <TableCell>{formatDateTime(c.updated_at)}</TableCell>
+                  <TableCell align="right">
+                    {c.mail_count != null ? c.mail_count : '—'}
+                  </TableCell>
                   <TableCell align="right">
                     <Chip
                       size="small"
