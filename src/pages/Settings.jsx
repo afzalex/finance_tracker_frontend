@@ -148,7 +148,11 @@ export default function Settings() {
           </Typography>
 
           <Box sx={{ mt: 2 }}>
-            <Button component={RouterLink} to="/settings/rules" variant="contained">
+            <Button
+              component={RouterLink}
+              to="/settings/rules/classifications"
+              variant="contained"
+            >
               Manage Classifications & Parsers
             </Button>
           </Box>

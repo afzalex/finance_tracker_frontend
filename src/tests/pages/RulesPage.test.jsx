@@ -30,6 +30,26 @@ function TxReturnStub() {
   return <div>Back on transactions</div>
 }
 
+function RulesRoutes() {
+  return (
+    <Routes>
+      <Route
+        path="/settings/rules/classifications"
+        element={<RulesPage />}
+      />
+      <Route
+        path="/settings/rules/classifications/:classificationId"
+        element={<RulesPage />}
+      />
+      <Route path="/settings/rules/parsers" element={<RulesPage />} />
+      <Route
+        path="/settings/rules/parsers/:parserId"
+        element={<RulesPage />}
+      />
+    </Routes>
+  )
+}
+
 describe('RulesPage', () => {
   it('renders classifications by default and switches to parsers', async () => {
     vi.mocked(listClassifications).mockResolvedValueOnce([
@@ -54,10 +74,8 @@ describe('RulesPage', () => {
     ])
 
     renderWithTheme(
-      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
-        <Routes>
-          <Route path="/settings/rules" element={<RulesPage />} />
-        </Routes>
+      <MemoryRouter initialEntries={['/settings/rules/classifications']}>
+        <RulesRoutes />
       </MemoryRouter>,
     )
 
@@ -91,15 +109,8 @@ describe('RulesPage', () => {
     vi.mocked(createClassification).mockResolvedValue({ id: 2 })
 
     renderWithTheme(
-      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
-        <Routes>
-          <Route path="/settings/rules" element={<RulesPage />} />
-          <Route
-            path="/settings/rules/classifications/:classificationId"
-            element={<RulesPage />}
-          />
-          <Route path="/settings/rules/parsers/:parserId" element={<RulesPage />} />
-        </Routes>
+      <MemoryRouter initialEntries={['/settings/rules/classifications']}>
+        <RulesRoutes />
       </MemoryRouter>,
     )
 
@@ -143,15 +154,8 @@ describe('RulesPage', () => {
     vi.mocked(createParser).mockResolvedValue({ id: 1 })
 
     renderWithTheme(
-      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
-        <Routes>
-          <Route path="/settings/rules" element={<RulesPage />} />
-          <Route
-            path="/settings/rules/classifications/:classificationId"
-            element={<RulesPage />}
-          />
-          <Route path="/settings/rules/parsers/:parserId" element={<RulesPage />} />
-        </Routes>
+      <MemoryRouter initialEntries={['/settings/rules/classifications']}>
+        <RulesRoutes />
       </MemoryRouter>,
     )
 
@@ -193,14 +197,8 @@ describe('RulesPage', () => {
     vi.mocked(deactivateClassification).mockResolvedValue({ id: 1 })
 
     renderWithTheme(
-      <MemoryRouter initialEntries={['/settings/rules?tab=classifications']}>
-        <Routes>
-          <Route path="/settings/rules" element={<RulesPage />} />
-          <Route
-            path="/settings/rules/classifications/:classificationId"
-            element={<RulesPage />}
-          />
-        </Routes>
+      <MemoryRouter initialEntries={['/settings/rules/classifications']}>
+        <RulesRoutes />
       </MemoryRouter>,
     )
     const user = userEvent.setup()
@@ -246,12 +244,15 @@ describe('RulesPage', () => {
     vi.mocked(patchClassification).mockResolvedValue({ id: 1 })
 
     const returnPath = '/transactions/99?tab=email&page=0&ps=25'
-    const entry = `/settings/rules/classifications/1?tab=classifications&returnTo=${encodeURIComponent(returnPath)}`
+    const entry = `/settings/rules/classifications/1?returnTo=${encodeURIComponent(returnPath)}`
 
     renderWithTheme(
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
-          <Route path="/settings/rules" element={<RulesPage />} />
+          <Route
+            path="/settings/rules/classifications"
+            element={<RulesPage />}
+          />
           <Route
             path="/settings/rules/classifications/:classificationId"
             element={<RulesPage />}
@@ -311,13 +312,16 @@ describe('RulesPage', () => {
     vi.mocked(patchParser).mockResolvedValue({ id: 1 })
 
     const returnPath = '/transactions/88?tab=email&page=0&ps=25'
-    const entry = `/settings/rules/parsers/1?tab=parsers&returnTo=${encodeURIComponent(returnPath)}`
+    const entry = `/settings/rules/parsers/1?returnTo=${encodeURIComponent(returnPath)}`
 
     renderWithTheme(
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
-          <Route path="/settings/rules" element={<RulesPage />} />
-          <Route path="/settings/rules/parsers/:parserId" element={<RulesPage />} />
+          <Route path="/settings/rules/parsers" element={<RulesPage />} />
+          <Route
+            path="/settings/rules/parsers/:parserId"
+            element={<RulesPage />}
+          />
           <Route path="/transactions/:transactionId" element={<TxReturnStub />} />
         </Routes>
       </MemoryRouter>,

@@ -1,9 +1,11 @@
+import { mockAnalytics, mockStats } from '../mocks/mockData'
 import {
-  mockAccounts,
-  mockAnalytics,
-  mockStats,
-} from '../mocks/mockData'
-import { adminApi, emailsApi, metadataApi, transactionsApi } from './apiConfig'
+  accountsApi,
+  adminApi,
+  emailsApi,
+  metadataApi,
+  transactionsApi,
+} from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -113,9 +115,66 @@ export async function getDashboardStats() {
   return mockStats
 }
 
+/**
+ * GET /api/v1/accounts — merged rollup per account (optional `_conflict` on row ignored in UI for now).
+ * `name` is `display_name` trimmed only; use `account_id` and `provider` for identity.
+ * @returns {Promise<Array<{
+ *   id: string,
+ *   account_id: string,
+ *   provider: string,
+ *   name: string,
+ *   type: string,
+ *   debitTotal: number,
+ *   creditTotal: number,
+ *   net: number,
+ *   balance: number,
+ *   count: number,
+ *   currency: string,
+ *   hasConflict: boolean,
+ *   raw: import('../api').AccountFromTransactionsMergedRead,
+ * }>>}
+ */
 export async function listAccounts() {
-  await sleep(150)
-  return mockAccounts
+  try {
+    const res = await accountsApi.listAccountsApiV1AccountsGet()
+    const items = res.data ?? []
+    return items.map((a) => {
+      const name = String(a.display_name ?? '').trim()
+      const net = a.amount
+      const conflict = a._conflict
+      const hasConflict = Array.isArray(conflict) && conflict.length > 0
+      return {
+        id:
+          a.id != null && Number.isFinite(Number(a.id))
+            ? String(a.id)
+            : `${a.provider}:${a.account_id}`,
+        account_id: a.account_id,
+        provider: a.provider,
+        name,
+        type: a.account_type ?? '—',
+        debitTotal: a.debit_amount,
+        creditTotal: a.credit_amount,
+        net,
+        balance: net,
+        count: a.count,
+        currency: 'USD',
+        hasConflict,
+        raw: a,
+      }
+    })
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
+}
+
+/** PUT /api/v1/accounts — create or update metadata for ``provider`` + ``account_id``. */
+export async function upsertAccount(payload) {
+  try {
+    const res = await accountsApi.putAccountApiV1AccountsPut(payload)
+    return res.data
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
 }
 
 /**

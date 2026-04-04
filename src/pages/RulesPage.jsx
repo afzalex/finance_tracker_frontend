@@ -10,16 +10,28 @@ import {
   Tabs,
 } from '@mui/material'
 import { useMemo, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom'
 import ClassificationsSection from '../components/rules/ClassificationsSection'
 import ParsersSection from '../components/rules/ParsersSection'
 
+function rulesQuerySuffix(searchParams) {
+  const sp = new URLSearchParams(searchParams)
+  sp.delete('tab')
+  const qs = sp.toString()
+  return qs ? `?${qs}` : ''
+}
+
 export default function RulesPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const params = useParams()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
 
-  const tabParam = String(searchParams.get('tab') ?? '').toLowerCase()
   const classificationIdParam = params.classificationId
   const parserIdParam = params.parserId
 
@@ -38,18 +50,19 @@ export default function RulesPage() {
     return Number.isFinite(n) ? n : null
   }, [parserIdParam, routeParserNew])
 
-  const forcedTab =
-    routeClassificationId != null || routeClassificationNew
-      ? 0
-      : routeParserId != null || routeParserNew
-        ? 1
-        : null
+  const isParsersPath = location.pathname.startsWith('/settings/rules/parsers')
 
   const tab = useMemo(() => {
-    if (forcedTab != null) return forcedTab
-    if (tabParam === 'parsers') return 1
-    return 0
-  }, [forcedTab, tabParam])
+    if (routeClassificationId != null || routeClassificationNew) return 0
+    if (routeParserId != null || routeParserNew) return 1
+    return isParsersPath ? 1 : 0
+  }, [
+    isParsersPath,
+    routeClassificationId,
+    routeClassificationNew,
+    routeParserId,
+    routeParserNew,
+  ])
 
   const [classificationsShowInactive, setClassificationsShowInactive] =
     useState(false)
@@ -61,62 +74,47 @@ export default function RulesPage() {
     tab === 0 ? setClassificationsShowInactive : setParsersShowInactive
 
   const triggerCreate = () => {
-    const sp = new URLSearchParams(searchParams)
+    const suffix = rulesQuerySuffix(searchParams)
     if (tab === 0) {
-      sp.set('tab', 'classifications')
-      navigate(`/settings/rules/classifications/new?${sp.toString()}`)
+      navigate(`/settings/rules/classifications/new${suffix}`)
     } else {
-      sp.set('tab', 'parsers')
-      navigate(`/settings/rules/parsers/new?${sp.toString()}`)
+      navigate(`/settings/rules/parsers/new${suffix}`)
     }
   }
 
   const setTabAndUrl = (nextTab) => {
-    const next = nextTab === 1 ? 'parsers' : 'classifications'
-    if (
-      routeClassificationId != null ||
-      routeParserId != null ||
-      routeClassificationNew ||
-      routeParserNew
-    ) {
-      const sp = new URLSearchParams(searchParams)
-      sp.set('tab', next)
-      navigate(`/settings/rules?${sp.toString()}`)
-    } else {
-      setSearchParams((prev) => {
-        const sp = new URLSearchParams(prev)
-        sp.set('tab', next)
-        return sp
-      })
-    }
+    const suffix = rulesQuerySuffix(searchParams)
+    navigate(
+      nextTab === 1
+        ? `/settings/rules/parsers${suffix}`
+        : `/settings/rules/classifications${suffix}`,
+    )
   }
 
   const openClassificationById = (id) => {
-    const sp = new URLSearchParams(searchParams)
-    sp.set('tab', 'classifications')
-    navigate(`/settings/rules/classifications/${id}?${sp.toString()}`)
+    const suffix = rulesQuerySuffix(searchParams)
+    navigate(`/settings/rules/classifications/${id}${suffix}`)
   }
 
   const closeClassificationRoute = () => {
     const sp = new URLSearchParams()
-    sp.set('tab', 'classifications')
     const ret = searchParams.get('returnTo')
     if (ret) sp.set('returnTo', ret)
-    navigate(`/settings/rules?${sp.toString()}`)
+    const qs = sp.toString()
+    navigate(qs ? `/settings/rules/classifications?${qs}` : '/settings/rules/classifications')
   }
 
   const openParserById = (id) => {
-    const sp = new URLSearchParams(searchParams)
-    sp.set('tab', 'parsers')
-    navigate(`/settings/rules/parsers/${id}?${sp.toString()}`)
+    const suffix = rulesQuerySuffix(searchParams)
+    navigate(`/settings/rules/parsers/${id}${suffix}`)
   }
 
   const closeParserRoute = () => {
     const sp = new URLSearchParams()
-    sp.set('tab', 'parsers')
     const ret = searchParams.get('returnTo')
     if (ret) sp.set('returnTo', ret)
-    navigate(`/settings/rules?${sp.toString()}`)
+    const qs = sp.toString()
+    navigate(qs ? `/settings/rules/parsers?${qs}` : '/settings/rules/parsers')
   }
 
   return (

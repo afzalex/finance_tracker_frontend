@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import RootLayout from './components/RootLayout'
 import StartupGate from './components/StartupGate'
 import AppShell from './components/AppShell'
@@ -13,6 +13,20 @@ import UnparsedEmails from './pages/UnparsedEmails'
 import GmailOauthCallback from './pages/GmailOauthCallback'
 import NotFound from './pages/NotFound'
 
+/** `/settings/rules` → `/settings/rules/classifications` or `…/parsers` (honours legacy `?tab=`). */
+function SettingsRulesRedirect() {
+  const [searchParams] = useSearchParams()
+  const tab = String(searchParams.get('tab') ?? '').toLowerCase()
+  const base =
+    tab === 'parsers'
+      ? '/settings/rules/parsers'
+      : '/settings/rules/classifications'
+  const sp = new URLSearchParams(searchParams)
+  sp.delete('tab')
+  const qs = sp.toString()
+  return <Navigate to={qs ? `${base}?${qs}` : base} replace />
+}
+
 function App() {
   return (
     <AppMetaProvider>
@@ -26,15 +40,21 @@ function App() {
               <Route path="transactions" element={<Transactions />} />
               <Route path="transactions/:transactionId" element={<Transactions />} />
               <Route path="accounts" element={<Accounts />} />
+              <Route path="accounts/:accountId" element={<Accounts />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="emails/unparsed" element={<UnparsedEmails />} />
               <Route path="emails/unparsed/:mailId" element={<UnparsedEmails />} />
               <Route path="settings" element={<Settings />} />
-              <Route path="settings/rules" element={<RulesPage />} />
+              <Route path="settings/rules" element={<SettingsRulesRedirect />} />
+              <Route
+                path="settings/rules/classifications"
+                element={<RulesPage />}
+              />
               <Route
                 path="settings/rules/classifications/:classificationId"
                 element={<RulesPage />}
               />
+              <Route path="settings/rules/parsers" element={<RulesPage />} />
               <Route
                 path="settings/rules/parsers/:parserId"
                 element={<RulesPage />}

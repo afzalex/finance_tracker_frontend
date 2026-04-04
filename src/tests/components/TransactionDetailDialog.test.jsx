@@ -193,12 +193,12 @@ describe('TransactionDetailDialog', () => {
       expect(screen.getByText('transaction')).toBeInTheDocument()
     })
     expect(screen.getByText('default')).toBeInTheDocument()
-    const expectedTo = `/settings/rules/classifications/12?tab=classifications&returnTo=${encodeURIComponent(fromPath)}`
+    const expectedTo = `/settings/rules/classifications/12?returnTo=${encodeURIComponent(fromPath)}`
     expect(screen.getByRole('link', { name: 'transaction' })).toHaveAttribute(
       'href',
       expectedTo,
     )
-    const expectedParserTo = `/settings/rules/parsers/34?tab=parsers&returnTo=${encodeURIComponent(fromPath)}`
+    const expectedParserTo = `/settings/rules/parsers/34?returnTo=${encodeURIComponent(fromPath)}`
     expect(screen.getByRole('link', { name: 'default' })).toHaveAttribute(
       'href',
       expectedParserTo,
@@ -236,7 +236,7 @@ describe('TransactionDetailDialog', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Create parser' })).toBeInTheDocument()
     })
-    const expectedCreateParserTo = `/settings/rules/parsers/new?tab=parsers&returnTo=${encodeURIComponent(fromPath)}`
+    const expectedCreateParserTo = `/settings/rules/parsers/new?returnTo=${encodeURIComponent(fromPath)}`
     expect(screen.getByRole('link', { name: 'Create parser' })).toHaveAttribute(
       'href',
       expectedCreateParserTo,

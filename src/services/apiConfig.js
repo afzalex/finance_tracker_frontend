@@ -1,4 +1,5 @@
 import {
+  AccountsApi,
   AdminApi,
   ClassificationsApi,
   Configuration,
@@ -19,6 +20,7 @@ export const apiBasePath = (import.meta.env.VITE_API_BASE_URL ?? '').replace(
 const configuration = new Configuration({ basePath: apiBasePath })
 
 export const transactionsApi = new TransactionsApi(configuration)
+export const accountsApi = new AccountsApi(configuration)
 export const emailsApi = new EmailsApi(configuration)
 export const metadataApi = new MetadataApi(configuration)
 export const adminApi = new AdminApi(configuration)

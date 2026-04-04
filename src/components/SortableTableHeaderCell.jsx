@@ -13,7 +13,33 @@ export default function SortableTableHeaderCell({
   const cellAlign = align ?? 'left'
 
   const sortLabel = (
-    <TableSortLabel active={active} direction={direction} component="span">
+    <TableSortLabel
+      active={active}
+      direction={direction}
+      component="span"
+      sx={
+        cellAlign === 'right'
+          ? {
+              position: 'relative',
+              display: 'inline-flex',
+              alignItems: 'center',
+              [`& .${tableSortLabelClasses.icon}`]: {
+                position: 'absolute',
+                right: '100%',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                marginLeft: 0,
+                marginRight: 4,
+                opacity: active ? 1 : 0,
+                transition: (theme) =>
+                  theme.transitions.create('opacity', {
+                    duration: theme.transitions.duration.shorter,
+                  }),
+              },
+            }
+          : undefined
+      }
+    >
       {children}
     </TableSortLabel>
   )

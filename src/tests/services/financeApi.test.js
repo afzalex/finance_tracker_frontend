@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { emailsApi, transactionsApi } from '../../services/apiConfig'
+import { accountsApi, emailsApi, transactionsApi } from '../../services/apiConfig'
 import {
   apiErrorMessage,
   getFetchedEmailByMailId,
@@ -7,8 +7,9 @@ import {
   getDashboardStats,
   listAccounts,
   getAnalytics,
+  upsertAccount,
 } from '../../services/financeApi'
-import { mockAccounts, mockStats, mockAnalytics } from '../../mocks/mockData'
+import { mockStats, mockAnalytics } from '../../mocks/mockData'
 
 vi.mock('../../services/apiConfig', () => ({
   emailsApi: {
@@ -16,6 +17,10 @@ vi.mock('../../services/apiConfig', () => ({
   },
   transactionsApi: {
     listTransactionsApiV1TransactionsGet: vi.fn(),
+  },
+  accountsApi: {
+    listAccountsApiV1AccountsGet: vi.fn(),
+    putAccountApiV1AccountsPut: vi.fn(),
   },
 }))
 
@@ -150,15 +155,142 @@ describe('listTransactions', () => {
   })
 })
 
+describe('listAccounts', () => {
+  beforeEach(() => {
+    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockReset()
+  })
+
+  it('maps API rows for the Accounts page', async () => {
+    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockResolvedValue({
+      data: [
+        {
+          account_id: 'chk-1',
+          provider: 'chase',
+          account_type: 'CHECKING',
+          display_name: 'Checking',
+          amount: 12842.53,
+          count: 10,
+          credit_amount: 13000,
+          credit_count: 5,
+          debit_amount: 157.47,
+          debit_count: 5,
+          id: 1,
+        },
+      ],
+    })
+
+    const rows = await listAccounts()
+
+    expect(accountsApi.listAccountsApiV1AccountsGet).toHaveBeenCalled()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      id: '1',
+      account_id: 'chk-1',
+      provider: 'chase',
+      name: 'Checking',
+      type: 'CHECKING',
+      debitTotal: 157.47,
+      creditTotal: 13000,
+      net: 12842.53,
+      balance: 12842.53,
+      count: 10,
+      currency: 'USD',
+      hasConflict: false,
+    })
+  })
+
+  it('sets hasConflict when _conflict is non-empty', async () => {
+    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockResolvedValue({
+      data: [
+        {
+          account_id: 'a1',
+          provider: 'p',
+          amount: 0,
+          count: 1,
+          credit_amount: 0,
+          credit_count: 0,
+          debit_amount: 0,
+          debit_count: 1,
+          _conflict: [{ provider: 'x', count: 1 }],
+        },
+      ],
+    })
+
+    const rows = await listAccounts()
+    expect(rows[0].hasConflict).toBe(true)
+  })
+
+  it('uses provider · account_id when display_name is blank', async () => {
+    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockResolvedValue({
+      data: [
+        {
+          account_id: 'x',
+          provider: 'bank',
+          amount: 0,
+          count: 0,
+          credit_amount: 0,
+          credit_count: 0,
+          debit_amount: 0,
+          debit_count: 0,
+        },
+      ],
+    })
+
+    const rows = await listAccounts()
+    expect(rows[0].name).toBe('')
+    expect(rows[0].account_id).toBe('x')
+    expect(rows[0].provider).toBe('bank')
+    expect(rows[0].id).toBe('bank:x')
+  })
+
+  it('throws with apiErrorMessage when the request fails', async () => {
+    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockRejectedValue({
+      response: { data: { detail: 'nope' } },
+    })
+
+    await expect(listAccounts()).rejects.toThrow('nope')
+  })
+})
+
+describe('upsertAccount', () => {
+  beforeEach(() => {
+    vi.mocked(accountsApi.putAccountApiV1AccountsPut).mockReset()
+  })
+
+  it('returns response data', async () => {
+    vi.mocked(accountsApi.putAccountApiV1AccountsPut).mockResolvedValue({
+      data: { account_id: 'a1', provider: 'bank' },
+    })
+
+    const out = await upsertAccount({
+      account_id: 'a1',
+      provider: 'bank',
+      display_name: 'Main',
+    })
+
+    expect(out).toEqual({ account_id: 'a1', provider: 'bank' })
+    expect(accountsApi.putAccountApiV1AccountsPut).toHaveBeenCalledWith({
+      account_id: 'a1',
+      provider: 'bank',
+      display_name: 'Main',
+    })
+  })
+
+  it('throws with apiErrorMessage when the request fails', async () => {
+    vi.mocked(accountsApi.putAccountApiV1AccountsPut).mockRejectedValue({
+      response: { data: { detail: 'reject' } },
+    })
+
+    await expect(
+      upsertAccount({ account_id: 'a1', provider: 'bank' }),
+    ).rejects.toThrow('reject')
+  })
+})
+
 describe('Mock Services', () => {
   it('getDashboardStats resolves with mockStats', async () => {
     const stats = await getDashboardStats()
     expect(stats).toEqual(mockStats)
-  })
-
-  it('listAccounts resolves with mockAccounts', async () => {
-    const accounts = await listAccounts()
-    expect(accounts).toEqual(mockAccounts)
   })
 
   it('getAnalytics resolves with mockAnalytics', async () => {

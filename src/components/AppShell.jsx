@@ -14,12 +14,12 @@ import {
 } from '@mui/material'
 import {
   BarChart3,
+  Landmark,
   LayoutDashboard,
   List as ListIcon,
   Mail,
   Menu,
   Settings,
-  WalletCards,
 } from 'lucide-react'
 
 const drawerWidth = 240
@@ -38,7 +38,7 @@ export default function AppShell() {
       {
         label: 'Accounts',
         to: '/accounts',
-        icon: <WalletCards size={20} />,
+        icon: <Landmark size={20} />,
       },
       { label: 'Analytics', to: '/analytics', icon: <BarChart3 size={20} /> },
       { label: 'Settings', to: '/settings', icon: <Settings size={20} /> },

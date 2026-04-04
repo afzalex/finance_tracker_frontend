@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatDateTime, formatMoney } from '../../utils/format'
+import {
+  formatDate,
+  formatDateTime,
+  formatInrAmount,
+  formatInrAmountParts,
+  formatMoney,
+} from '../../utils/format'
 
 describe('formatDate', () => {
   it('returns a non-empty locale string for valid ISO date', () => {
@@ -37,5 +43,25 @@ describe('formatMoney', () => {
   it('respects currency option', () => {
     const out = formatMoney(10, 'EUR')
     expect(out).toMatch(/10/)
+  })
+})
+
+describe('formatInrAmountParts', () => {
+  it('splits code and figure', () => {
+    const { code, figure } = formatInrAmountParts(1234.5)
+    expect(code).toBe('INR')
+    expect(figure).toMatch(/1[,.]?234/)
+  })
+})
+
+describe('formatInrAmount', () => {
+  it('prefixes INR with two decimals', () => {
+    expect(formatInrAmount(1234.5)).toMatch(/^INR /)
+    expect(formatInrAmount(1234.5)).toMatch(/1[,.]?234/)
+  })
+
+  it('formats negatives', () => {
+    expect(formatInrAmount(-99)).toMatch(/^INR /)
+    expect(formatInrAmount(-99)).toMatch(/99/)
   })
 })
