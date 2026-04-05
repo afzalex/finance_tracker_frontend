@@ -20,6 +20,8 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
@@ -37,7 +39,20 @@ import {
 import useResource from '../hooks/useResource'
 import useDateRange from '../contexts/useDateRange'
 import { signedAmountSx } from '../utils/moneySx'
+import {
+  dataCardWidthSx,
+  layoutSectionDividerBottomSx,
+  layoutSectionMarginBottomSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+  tableHorizontalScrollSx,
+  tablePaginationSmallScreenSx,
+  tableSmallScreenTextSx,
+} from '../utils/responsiveTable'
+import { parseSafeReturnToParam } from '../utils/safeReturnTo'
 import { formatDateTime } from '../utils/format'
+
+const TRANSACTIONS_TABLE_MIN_WIDTH = 920
 
 const TABLE_COLGROUP = (
   <colgroup>
@@ -89,6 +104,7 @@ const TX_Q = {
   direction: 'direction',
   sort: 'sort',
   mail_id: 'mail_id',
+  returnTo: 'returnTo',
 }
 
 function parseTxSortParam(sp) {
@@ -109,6 +125,8 @@ function isDefaultTxSort(sortBy, sortDir) {
 }
 
 export default function Transactions() {
+  const theme = useTheme()
+  const isMdDown = useMediaQuery(theme.breakpoints.down('md'))
   const navigate = useNavigate()
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -131,6 +149,11 @@ export default function Transactions() {
   }, [searchParams])
   const { sortBy, sortDir } = useMemo(
     () => parseTxSortParam(searchParams),
+    [searchParams],
+  )
+
+  const safeReturnTo = useMemo(
+    () => parseSafeReturnToParam(searchParams.get(TX_Q.returnTo)),
     [searchParams],
   )
 
@@ -381,34 +404,38 @@ export default function Transactions() {
 
   const closeDetail = useCallback(() => {
     suppressRouteOpenRef.current = true
+    if (safeReturnTo) {
+      navigate(safeReturnTo)
+      setSelectedRow(null)
+      return
+    }
     const sp = new URLSearchParams(searchParams)
     sp.delete('tab')
+    sp.delete(TX_Q.returnTo)
     const qs = sp.toString()
     navigate(qs ? `/transactions?${qs}` : '/transactions')
     setSelectedRow(null)
-  }, [navigate, searchParams])
+  }, [navigate, searchParams, safeReturnTo])
 
   const detailTab = tabParam === 'email' ? 'email' : 'transaction'
-
   return (
-    <Stack spacing={2}>
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
       <Stack
-        direction="row"
-        alignItems="center"
+        direction={{ xs: 'column', md: 'row' }}
+        alignItems={{ xs: 'stretch', md: 'center' }}
         justifyContent="space-between"
-        flexWrap="wrap"
-        gap={2}
+        gap={layoutSectionSpacing}
       >
         <PageHeader title="Transactions" />
-        <Box sx={{ flexShrink: 0 }}>
-          <HeaderDateRangeFilter />
+        <Box sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: { md: 0 } }}>
+          <HeaderDateRangeFilter fullWidth={isMdDown} />
         </Box>
       </Stack>
 
       <Stack
         direction="row"
         flexWrap="wrap"
-        gap={2}
+        gap={layoutSectionSpacing}
         alignItems="center"
         sx={{ width: '100%' }}
       >
@@ -418,9 +445,22 @@ export default function Transactions() {
           onChange={handleQueryChange}
           placeholder="Search merchant or payee…"
           size="small"
-          sx={{ minWidth: 220, flex: '1 1 200px' }}
+          sx={{
+            flex: { xs: '1 1 100%', md: '1 1 200px' },
+            width: { xs: '100%', md: 'auto' },
+            minWidth: { xs: 0, md: 220 },
+          }}
         />
-        <FormControl size="small" sx={{ minWidth: 160 }} disabled={distinctStatus !== 'success'}>
+        <FormControl
+          size="small"
+          sx={{
+            flex: { xs: '1 1 calc(50% - 8px)', md: '0 1 auto' },
+            minWidth: { xs: 0, md: 160 },
+            maxWidth: { xs: 'calc(50% - 8px)', md: 'none' },
+            width: { xs: 'calc(50% - 8px)', md: 'auto' },
+          }}
+          disabled={distinctStatus !== 'success'}
+        >
           <InputLabel id="tx-filter-provider-label">Provider</InputLabel>
           <Select
             labelId="tx-filter-provider-label"
@@ -450,8 +490,16 @@ export default function Transactions() {
             ))}
           </Select>
         </FormControl>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel id="tx-filter-direction-label">Direction</InputLabel>
+        <FormControl
+          size="small"
+          sx={{
+            flex: { xs: '1 1 calc(50% - 8px)', md: '0 1 auto' },
+            minWidth: { xs: 0, md: 140 },
+            maxWidth: { xs: 'calc(50% - 8px)', md: 'none' },
+            width: { xs: 'calc(50% - 8px)', md: 'auto' },
+          }}
+        >
+          <InputLabel id="tx-filter-direction-label">Debit/Credit</InputLabel>
           <Select
             labelId="tx-filter-direction-label"
             label="Direction"
@@ -489,26 +537,38 @@ export default function Transactions() {
       {routeOpenError && <Alert severity="warning">{routeOpenError}</Alert>}
       {mailLinkError && <Alert severity="warning">{mailLinkError}</Alert>}
 
-      <Card variant="outlined">
-        <CardContent>
-          <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+      <Card variant="outlined" sx={dataCardWidthSx}>
+        <CardContent sx={{ minWidth: 0 }}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            sx={layoutSectionMarginBottomSx}
+          >
             <Typography variant="h6">Latest</Typography>
             <Typography variant="body2" color="text.secondary">
               {total} total
             </Typography>
           </Stack>
-          <Divider sx={{ mb: 1 }} />
+          <Divider sx={layoutSectionDividerBottomSx} />
 
           {status === 'loading' ? (
             <LoadingBlock />
           ) : routeOpening || mailLinkResolving ? (
             <LoadingBlock />
           ) : (
-            <Box sx={{ width: '100%', overflowX: 'auto' }}>
+            <>
+            <Box sx={tableHorizontalScrollSx}>
               <Table
                 size="small"
                 aria-label="transactions table"
-                sx={{ tableLayout: 'fixed', width: '100%' }}
+                sx={[
+                  {
+                    minWidth: TRANSACTIONS_TABLE_MIN_WIDTH,
+                    tableLayout: 'fixed',
+                    width: '100%',
+                  },
+                  tableSmallScreenTextSx(theme),
+                ]}
               >
                 {TABLE_COLGROUP}
                 <TableHead>
@@ -580,7 +640,7 @@ export default function Transactions() {
                     </SortableTableHeaderCell>
                     <SortableTableHeaderCell
                       align="right"
-                      sx={{ whiteSpace: 'nowrap' }}
+                      sx={[clipCellSx, { whiteSpace: 'nowrap' }]}
                       sortDirection={
                         sortBy === TX_SORT_COL.amount ? sortDir : false
                       }
@@ -631,7 +691,10 @@ export default function Transactions() {
                       </TableCell>
                       <TableCell
                         align="right"
-                        sx={{ ...signedAmountSx(t.amount), whiteSpace: 'nowrap' }}
+                        sx={[
+                          clipCellSx,
+                          { ...signedAmountSx(t.amount), whiteSpace: 'nowrap' },
+                        ]}
                         title={t.amountRaw}
                       >
                         {t.amountRaw}
@@ -650,6 +713,7 @@ export default function Transactions() {
                   )}
                 </TableBody>
               </Table>
+            </Box>
               <TablePagination
                 component="div"
                 count={total}
@@ -678,8 +742,12 @@ export default function Transactions() {
                   )
                 }}
                 rowsPerPageOptions={[10, 25, 50, 75, 100]}
+                sx={[
+                  { width: '100%', maxWidth: '100%', overflow: 'hidden' },
+                  tablePaginationSmallScreenSx(theme),
+                ]}
               />
-            </Box>
+            </>
           )}
         </CardContent>
       </Card>

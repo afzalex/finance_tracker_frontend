@@ -14,6 +14,7 @@ import { apiErrorMessage, getAppMetadata } from '../services/financeApi'
 import { apiBasePath } from '../services/apiConfig'
 import { adminApi } from '../services/apiConfig'
 import useSetAppMeta from '../contexts/useSetAppMeta'
+import { layoutSectionSpacing } from '../utils/responsiveTable'
 
 function FullPageMessage({ title, children, actions }) {
   return (
@@ -26,7 +27,7 @@ function FullPageMessage({ title, children, actions }) {
         p: 3,
       }}
     >
-      <Stack spacing={2} sx={{ maxWidth: 720, width: '100%' }}>
+      <Stack spacing={layoutSectionSpacing} sx={{ maxWidth: 720, width: '100%' }}>
         <Toolbar />
         <Typography variant="h4" component="h1">
           {title}
@@ -78,7 +79,7 @@ export default function StartupGate() {
           p: 3,
         }}
       >
-        <Stack spacing={2} alignItems="center">
+        <Stack spacing={layoutSectionSpacing} alignItems="center">
           <Toolbar />
           <CircularProgress />
           <Typography variant="body2" color="text.secondary">

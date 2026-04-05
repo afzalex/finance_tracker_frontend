@@ -21,11 +21,19 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MessageType as ApiMessageType } from '../../api'
+import useDetailDialogSlotProps from '../../hooks/useDetailDialogSlotProps'
 import useResource from '../../hooks/useResource'
+import { dialogActionsCompactSx } from '../../utils/dialogActionsCompactSx'
+import {
+  layoutSectionSpacing,
+  tableHorizontalScrollSx,
+  tableSmallScreenTextSx,
+} from '../../utils/responsiveTable'
 import LoadingBlock from '../LoadingBlock'
 import SortableTableHeaderCell from '../SortableTableHeaderCell'
 import {
@@ -97,6 +105,8 @@ export default function ClassificationsSection({
   onOpenRule,
   onCloseRule,
 }) {
+  const theme = useTheme()
+  const detailSlotProps = useDetailDialogSlotProps()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const safeReturnPath = useMemo(
@@ -446,8 +456,12 @@ export default function ClassificationsSection({
       {status === 'loading' ? (
         <LoadingBlock />
       ) : (
-        <Box sx={{ width: '100%', overflowX: 'auto' }}>
-          <Table size="small" aria-label="classifications table">
+        <Box sx={tableHorizontalScrollSx}>
+          <Table
+            size="small"
+            aria-label="classifications table"
+            sx={tableSmallScreenTextSx(theme)}
+          >
             <TableHead>
               <TableRow>
                 <SortableTableHeaderCell
@@ -568,14 +582,22 @@ export default function ClassificationsSection({
         onClose={() => requestDismissClassificationDialog()}
         fullWidth
         maxWidth="md"
-        PaperProps={{ sx: { position: 'relative', overflow: 'visible' } }}
+        slotProps={{
+          paper: {
+            sx: [
+              { position: 'relative', overflow: 'visible' },
+              detailSlotProps.paper.sx,
+            ],
+          },
+        }}
       >
         <DialogTitle
           sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 2,
+            gap: 1,
+            pr: 1,
           }}
         >
           <span>
@@ -598,7 +620,7 @@ export default function ClassificationsSection({
           />
         </DialogTitle>
         <DialogContent dividers sx={{ position: 'relative' }}>
-          <Stack spacing={2}>
+          <Stack spacing={layoutSectionSpacing}>
             <Typography variant="subtitle2" color="text.secondary">
               Core
             </Typography>
@@ -745,7 +767,7 @@ export default function ClassificationsSection({
           </Stack>
         </DialogContent>
 
-        <DialogActions sx={{ gap: 1 }}>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button
             size="small"
             onClick={requestDismissClassificationDialog}
@@ -788,6 +810,7 @@ export default function ClassificationsSection({
         open={leaveReturnDialog.open}
         onClose={handleLeaveReturnStay}
         maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>
           {leaveReturnDialog.path && leaveReturnDialog.variant
@@ -801,7 +824,7 @@ export default function ClassificationsSection({
               : ''}
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button size="small" onClick={handleLeaveReturnStay}>
             Stay here
           </Button>
@@ -811,7 +834,7 @@ export default function ClassificationsSection({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm">
+      <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm" fullWidth>
         <DialogTitle>Deactivate classification?</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary">
@@ -819,7 +842,7 @@ export default function ClassificationsSection({
             the database.
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button size="small" variant="outlined" onClick={closeDeactivate} disabled={deactivating}>
             Cancel
           </Button>
@@ -862,7 +885,7 @@ function StackFormGrid({ children }) {
     <Box
       sx={{
         display: 'grid',
-        gap: 2,
+        gap: layoutSectionSpacing,
         gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
       }}
     >

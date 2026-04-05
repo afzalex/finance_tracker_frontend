@@ -1,4 +1,5 @@
 import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material'
+import { dialogActionsCompactSx } from '../utils/dialogActionsCompactSx'
 
 export default function ConfirmDialog({
   open,
@@ -13,10 +14,10 @@ export default function ConfirmDialog({
   maxWidth = 'sm',
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={maxWidth}>
+    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth>
       {title ? <DialogTitle>{title}</DialogTitle> : null}
       <DialogContent dividers>{children}</DialogContent>
-      <DialogActions sx={{ gap: 1 }}>
+      <DialogActions sx={dialogActionsCompactSx}>
         <Button size="small" onClick={onClose} variant='outlined' {...cancelButtonProps}>
           {cancelText}
         </Button>

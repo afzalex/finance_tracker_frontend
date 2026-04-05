@@ -165,11 +165,15 @@ describe('UnparsedEmails', () => {
       `/settings/rules/parsers/34?returnTo=${expectedReturn}`,
     )
 
-    await user.click(screen.getByRole('button', { name: /Reprocess Email/i }))
-    expect(
-      await screen.findByRole('heading', { name: /Reprocess this email\?/i }),
-    ).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /^Reprocess$/i }))
+    await user.click(screen.getByRole('button', { name: /^Reprocess$/ }))
+    const confirmHeading = await screen.findByRole('heading', {
+      name: /Reprocess this email\?/i,
+    })
+    expect(confirmHeading).toBeInTheDocument()
+    const confirmDialog = confirmHeading.closest('[role="dialog"]')
+    await user.click(
+      within(confirmDialog).getByRole('button', { name: /^Reprocess$/i }),
+    )
 
     await waitFor(() => {
       expect(vi.mocked(reprocessEmailByMailId)).toHaveBeenCalledWith('m2')

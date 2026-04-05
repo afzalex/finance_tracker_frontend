@@ -23,6 +23,8 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -34,7 +36,21 @@ import PageHeader from '../components/PageHeader'
 import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { apiErrorMessage, listUnparsedEmails } from '../services/financeApi'
+import useDetailDialogSlotProps from '../hooks/useDetailDialogSlotProps'
 import { formatDateTime } from '../utils/format'
+import {
+  dataCardWidthSx,
+  layoutSectionDividerBottomSx,
+  layoutSectionMarginBottomSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+  tableHorizontalScrollSx,
+  tableSmallScreenTextSx,
+} from '../utils/responsiveTable'
+import { dialogActionsCompactSx } from '../utils/dialogActionsCompactSx'
+
+const UNPARSED_TABLE_MIN_WIDTH_WIDE = 1020
+const UNPARSED_TABLE_MIN_WIDTH_NARROW = 760
 
 const clipCellSx = {
   overflow: 'hidden',
@@ -174,6 +190,11 @@ function compareUnparsedRows(a, b, sortBy, sortDir) {
 }
 
 export default function UnparsedEmails() {
+  const theme = useTheme()
+  const isMdDown = useMediaQuery(theme.breakpoints.down('md'))
+  /** Parser filter + table column only at `md+` (avoids empty grid space on small screens). */
+  const showParserColumn = !isMdDown
+  const detailSlotProps = useDetailDialogSlotProps()
   const navigate = useNavigate()
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -536,18 +557,19 @@ export default function UnparsedEmails() {
     return `${rows.length} total`
   }, [status, rows.length, filteredRows.length, hasActiveFilters])
 
+  const tableColSpan = showParserColumn ? 6 : 5
+
   return (
-    <Stack spacing={2}>
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
       <Stack
-        direction="row"
-        alignItems="center"
+        direction={{ xs: 'column', md: 'row' }}
+        alignItems={{ xs: 'stretch', md: 'center' }}
         justifyContent="space-between"
-        flexWrap="wrap"
-        gap={2}
+        gap={layoutSectionSpacing}
       >
         <PageHeader title="Unparsed Emails" />
-        <Box sx={{ flexShrink: 0 }}>
-          <HeaderDateRangeFilter />
+        <Box sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: { md: 0 } }}>
+          <HeaderDateRangeFilter fullWidth={isMdDown} />
         </Box>
       </Stack>
 
@@ -556,7 +578,7 @@ export default function UnparsedEmails() {
       <Stack
         direction="row"
         flexWrap="wrap"
-        gap={2}
+        gap={layoutSectionSpacing}
         alignItems="center"
         sx={{ width: '100%' }}
       >
@@ -578,14 +600,20 @@ export default function UnparsedEmails() {
             )
           }}
           sx={{
-            minWidth: 220,
-            flex: '1 1 200px',
+            flex: { xs: '1 1 100%', md: '1 1 200px' },
+            width: { xs: '100%', md: 'auto' },
+            minWidth: { xs: 0, md: 220 },
           }}
           slotProps={{ htmlInput: { 'aria-label': 'Search subject' } }}
         />
         <FormControl
           size="small"
-          sx={{ minWidth: 200, maxWidth: 280 }}
+          sx={{
+            flex: { xs: '1 1 calc(50% - 8px)', md: '0 1 auto' },
+            minWidth: { xs: 0, md: 200 },
+            maxWidth: { xs: 'calc(50% - 8px)', md: 280 },
+            width: { xs: 'calc(50% - 8px)', md: 'auto' },
+          }}
           disabled={status !== 'success'}
         >
           <InputLabel id="unparsed-filter-whynot-label">
@@ -624,7 +652,12 @@ export default function UnparsedEmails() {
         </FormControl>
         <FormControl
           size="small"
-          sx={{ minWidth: 200, maxWidth: 280 }}
+          sx={{
+            flex: { xs: '1 1 calc(50% - 8px)', md: '0 1 auto' },
+            minWidth: { xs: 0, md: 200 },
+            maxWidth: { xs: 'calc(50% - 8px)', md: 280 },
+            width: { xs: 'calc(50% - 8px)', md: 'auto' },
+          }}
           disabled={status !== 'success'}
         >
           <InputLabel id="unparsed-filter-classification-label">
@@ -654,76 +687,97 @@ export default function UnparsedEmails() {
                     ))}
                   </Select>
         </FormControl>
-        <FormControl
-          size="small"
-          sx={{ minWidth: 200, maxWidth: 280 }}
-          disabled={status !== 'success'}
-          data-testid="unparsed-filter-parser"
-        >
-          <InputLabel id="unparsed-filter-parser-label">Parser</InputLabel>
-          <Select
-            labelId="unparsed-filter-parser-label"
-            id="unparsed-filter-parser"
-            value={filterParser}
-            label="Parser"
-            onChange={(e) =>
-              setListFilter(UNPARSED_Q.parser, e.target.value)
-            }
+        {!isMdDown ? (
+          <FormControl
+            size="small"
+            sx={{ minWidth: 200, maxWidth: 280 }}
+            disabled={status !== 'success'}
+            data-testid="unparsed-filter-parser"
           >
-                    <MenuItem value={FILTER_ALL}>
-                      <em>All</em>
-                    </MenuItem>
-                    {parserFilterOptions.hasEmpty && (
-                      <MenuItem value={FILTER_NONE}>
-                        <em>{FILTER_OPTION_LABEL_NONE}</em>
-                      </MenuItem>
-                    )}
-                    {parserFilterOptions.hasNonNull && (
-                      <MenuItem value={FILTER_PARSER_NON_NULL}>
-                        <em>{FILTER_OPTION_LABEL_HAS_PARSER}</em>
-                      </MenuItem>
-                    )}
-                    {parserFilterOptions.values.map((v) => (
-                      <MenuItem key={v} value={v}>
-                        {v}
-                      </MenuItem>
-                    ))}
-          </Select>
-        </FormControl>
+            <InputLabel id="unparsed-filter-parser-label">Parser</InputLabel>
+            <Select
+              labelId="unparsed-filter-parser-label"
+              id="unparsed-filter-parser"
+              value={filterParser}
+              label="Parser"
+              onChange={(e) =>
+                setListFilter(UNPARSED_Q.parser, e.target.value)
+              }
+            >
+              <MenuItem value={FILTER_ALL}>
+                <em>All</em>
+              </MenuItem>
+              {parserFilterOptions.hasEmpty && (
+                <MenuItem value={FILTER_NONE}>
+                  <em>{FILTER_OPTION_LABEL_NONE}</em>
+                </MenuItem>
+              )}
+              {parserFilterOptions.hasNonNull && (
+                <MenuItem value={FILTER_PARSER_NON_NULL}>
+                  <em>{FILTER_OPTION_LABEL_HAS_PARSER}</em>
+                </MenuItem>
+              )}
+              {parserFilterOptions.values.map((v) => (
+                <MenuItem key={v} value={v}>
+                  {v}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        ) : null}
       </Stack>
 
-      <Card variant="outlined">
-        <CardContent>
+      <Card variant="outlined" sx={dataCardWidthSx}>
+        <CardContent sx={{ minWidth: 0 }}>
           <Stack
             direction="row"
             justifyContent="space-between"
             alignItems="baseline"
-            sx={{ mb: 1 }}
+            sx={layoutSectionMarginBottomSx}
           >
-            <Typography variant="h6">Queued messages</Typography>
+            <Typography variant="h6"></Typography>
             <Typography variant="body2" color="text.secondary">
               {queueCountLabel}
             </Typography>
           </Stack>
-          <Divider sx={{ mb: 1 }} />
+          <Divider sx={layoutSectionDividerBottomSx} />
 
           {status === 'loading' ? (
             <LoadingBlock />
           ) : (
-            <Box sx={{ width: '100%', overflowX: 'auto' }}>
+            <Box sx={tableHorizontalScrollSx}>
               <Table
                 size="small"
                 aria-label="unparsed emails table"
-                sx={{ tableLayout: 'fixed', width: '100%' }}
+                sx={[
+                  {
+                    minWidth: showParserColumn
+                      ? UNPARSED_TABLE_MIN_WIDTH_WIDE
+                      : UNPARSED_TABLE_MIN_WIDTH_NARROW,
+                    tableLayout: 'fixed',
+                    width: '100%',
+                  },
+                  tableSmallScreenTextSx(theme),
+                ]}
               >
-                  <colgroup>
-                    <col style={{ width: '13%' }} />
-                    <col style={{ width: '26%' }} />
-                    <col style={{ width: '19%' }} />
-                    <col style={{ width: '15%' }} />
-                    <col style={{ width: '15%' }} />
-                    <col style={{ width: '12%' }} />
-                  </colgroup>
+                  {showParserColumn ? (
+                    <colgroup>
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '23%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '21%' }} />
+                    </colgroup>
+                  ) : (
+                    <colgroup>
+                      <col style={{ width: '17%' }} />
+                      <col style={{ width: '28%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: '19%' }} />
+                    </colgroup>
+                  )}
                   <TableHead>
                     <TableRow>
                       <SortableTableHeaderCell
@@ -755,21 +809,6 @@ export default function UnparsedEmails() {
                       <SortableTableHeaderCell
                         sx={clipCellSx}
                         sortDirection={
-                          sortBy === UNPARSED_SORT.whyNotParsed ? sortDir : false
-                        }
-                        active={sortBy === UNPARSED_SORT.whyNotParsed}
-                        direction={
-                          sortBy === UNPARSED_SORT.whyNotParsed ? sortDir : 'asc'
-                        }
-                        onSort={() =>
-                          toggleUnparsedSort(UNPARSED_SORT.whyNotParsed)
-                        }
-                      >
-                        Why Not Parsed
-                      </SortableTableHeaderCell>
-                      <SortableTableHeaderCell
-                        sx={clipCellSx}
-                        sortDirection={
                           sortBy === UNPARSED_SORT.classification ? sortDir : false
                         }
                         active={sortBy === UNPARSED_SORT.classification}
@@ -784,19 +823,21 @@ export default function UnparsedEmails() {
                       >
                         Classification
                       </SortableTableHeaderCell>
-                      <SortableTableHeaderCell
-                        sx={clipCellSx}
-                        sortDirection={
-                          sortBy === UNPARSED_SORT.parser ? sortDir : false
-                        }
-                        active={sortBy === UNPARSED_SORT.parser}
-                        direction={
-                          sortBy === UNPARSED_SORT.parser ? sortDir : 'asc'
-                        }
-                        onSort={() => toggleUnparsedSort(UNPARSED_SORT.parser)}
-                      >
-                        Parser
-                      </SortableTableHeaderCell>
+                      {showParserColumn ? (
+                        <SortableTableHeaderCell
+                          sx={clipCellSx}
+                          sortDirection={
+                            sortBy === UNPARSED_SORT.parser ? sortDir : false
+                          }
+                          active={sortBy === UNPARSED_SORT.parser}
+                          direction={
+                            sortBy === UNPARSED_SORT.parser ? sortDir : 'asc'
+                          }
+                          onSort={() => toggleUnparsedSort(UNPARSED_SORT.parser)}
+                        >
+                          Parser
+                        </SortableTableHeaderCell>
+                      ) : null}
                       <SortableTableHeaderCell
                         sx={clipCellSx}
                         sortDirection={
@@ -809,6 +850,28 @@ export default function UnparsedEmails() {
                         onSort={() => toggleUnparsedSort(UNPARSED_SORT.mailId)}
                       >
                         Mail ID
+                      </SortableTableHeaderCell>
+                      <SortableTableHeaderCell
+                        sx={[
+                          clipCellSx,
+                          {
+                            whiteSpace: 'nowrap',
+                            minWidth: { xs: 72, md: 120 },
+                            maxWidth: { xs: 200, md: 280 },
+                          },
+                        ]}
+                        sortDirection={
+                          sortBy === UNPARSED_SORT.whyNotParsed ? sortDir : false
+                        }
+                        active={sortBy === UNPARSED_SORT.whyNotParsed}
+                        direction={
+                          sortBy === UNPARSED_SORT.whyNotParsed ? sortDir : 'asc'
+                        }
+                        onSort={() =>
+                          toggleUnparsedSort(UNPARSED_SORT.whyNotParsed)
+                        }
+                      >
+                        Why Not Parsed
                       </SortableTableHeaderCell>
                     </TableRow>
                   </TableHead>
@@ -839,12 +902,6 @@ export default function UnparsedEmails() {
                         </TableCell>
                         <TableCell
                           sx={clipCellSx}
-                          title={r.reason ?? r.classification_reason ?? ''}
-                        >
-                          {whyNotParsedCellText(r)}
-                        </TableCell>
-                        <TableCell
-                          sx={clipCellSx}
                           title={
                             r.classification_id != null
                               ? `ID ${r.classification_id}`
@@ -853,22 +910,37 @@ export default function UnparsedEmails() {
                         >
                           {classificationCellText(r)}
                         </TableCell>
-                        <TableCell
-                          sx={clipCellSx}
-                          title={
-                            r.parser_id != null ? `ID ${r.parser_id}` : ''
-                          }
-                        >
-                          {parserCellText(r)}
-                        </TableCell>
+                        {showParserColumn ? (
+                          <TableCell
+                            sx={clipCellSx}
+                            title={
+                              r.parser_id != null ? `ID ${r.parser_id}` : ''
+                            }
+                          >
+                            {parserCellText(r)}
+                          </TableCell>
+                        ) : null}
                         <TableCell sx={clipCellSx} title={r.mail_id ?? ''}>
                           {r.mail_id ?? '—'}
+                        </TableCell>
+                        <TableCell
+                          sx={[
+                            clipCellSx,
+                            {
+                              whiteSpace: 'nowrap',
+                              minWidth: { xs: 72, md: 120 },
+                              maxWidth: { xs: 200, md: 280 },
+                            },
+                          ]}
+                          title={r.reason ?? r.classification_reason ?? ''}
+                        >
+                          {whyNotParsedCellText(r)}
                         </TableCell>
                       </TableRow>
                     ))}
                     {rows.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={tableColSpan}>
                           <Typography variant="body2" color="text.secondary">
                             No unparsed emails found.
                           </Typography>
@@ -877,7 +949,7 @@ export default function UnparsedEmails() {
                     )}
                     {rows.length > 0 && filteredRows.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6}>
+                        <TableCell colSpan={tableColSpan}>
                           <Typography variant="body2" color="text.secondary">
                             No rows match the current filters.
                           </Typography>
@@ -897,9 +969,40 @@ export default function UnparsedEmails() {
         maxWidth="md"
         fullWidth
         scroll="paper"
-        slotProps={{ transition: { timeout: 0 } }}
+        aria-labelledby="unparsed-source-dialog-title"
+        slotProps={{
+          ...detailSlotProps,
+          transition: { timeout: 0 },
+        }}
       >
-        <DialogTitle>Source Email</DialogTitle>
+        <DialogTitle
+          component="div"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: layoutSectionSpacing,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Typography
+            id="unparsed-source-dialog-title"
+            component="h2"
+            variant="h6"
+            sx={{ flex: '1 1 auto' }}
+          >
+            Source
+          </Typography>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={typeof openReprocessConfirm !== 'function'}
+            onClick={() => openReprocessConfirm?.()}
+            sx={{ flexShrink: 0, ml: 'auto' }}
+          >
+            Reprocess
+          </Button>
+        </DialogTitle>
         <DialogContent dividers>
           {uiDetailKey ? (
             <Box sx={{ pb: 3 }}>
@@ -927,21 +1030,12 @@ export default function UnparsedEmails() {
             borderTop: '1px solid',
             borderColor: 'divider',
             justifyContent: 'flex-start',
-            gap: 1,
             flexWrap: 'wrap',
+            ...dialogActionsCompactSx,
           }}
         >
           <Button size="small" variant="outlined" onClick={closeDetail}>
             Cancel
-          </Button>
-          <Box sx={{ flexGrow: 1 }} />
-          <Button
-            size="small"
-            variant="contained"
-            disabled={typeof openReprocessConfirm !== 'function'}
-            onClick={() => openReprocessConfirm?.()}
-          >
-            Reprocess Email
           </Button>
         </DialogActions>
       </Dialog>

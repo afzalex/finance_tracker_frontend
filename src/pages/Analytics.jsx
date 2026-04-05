@@ -12,6 +12,8 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 import { useMemo } from 'react'
 import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
@@ -22,8 +24,22 @@ import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { getAnalytics, listTopMerchants } from '../services/financeApi'
 import { signedAmountSx } from '../utils/moneySx'
+import {
+  dataCardWidthSx,
+  layoutSectionDividerSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+  tableHorizontalScrollSx,
+  tableSmallScreenTextSx,
+} from '../utils/responsiveTable'
+
+const MERCHANTS_TABLE_MIN = 400
+const CASHFLOW_TABLE_MIN = 480
+const CATEGORY_TABLE_MIN = 320
 
 export default function Analytics() {
+  const theme = useTheme()
+  const isMdDown = useMediaQuery(theme.breakpoints.down('md'))
   const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
   const analyticsKey = useMemo(
     () => JSON.stringify({ from: dateRangeFrom, to: dateRangeTo }),
@@ -44,21 +60,25 @@ export default function Analytics() {
   )
 
   const tablesLoading = status === 'loading'
-
   return (
-    <Stack spacing={2}>
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
       <Stack
-        direction="row"
-        alignItems="flex-start"
+        direction={{ xs: 'column', md: 'row' }}
+        alignItems={{ xs: 'stretch', md: 'flex-start' }}
         justifyContent="space-between"
-        flexWrap="wrap"
-        gap={2}
+        gap={layoutSectionSpacing}
       >
         <PageHeader
           title="Analytics"
         />
-        <Box sx={{ flexShrink: 0, alignSelf: 'center' }}>
-          <HeaderDateRangeFilter />
+        <Box
+          sx={{
+            width: { xs: '100%', md: 'auto' },
+            flexShrink: { md: 0 },
+            alignSelf: { md: 'center' },
+          }}
+        >
+          <HeaderDateRangeFilter fullWidth={isMdDown} />
         </Box>
       </Stack>
 
@@ -73,18 +93,32 @@ export default function Analytics() {
         <Box
           sx={{
             display: 'grid',
-            gap: 2,
+            gap: layoutSectionSpacing,
+            minWidth: 0,
+            maxWidth: '100%',
+            width: '100%',
             gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
           }}
         >
           <Card
             variant="outlined"
-            sx={{ gridColumn: { xs: 'auto', lg: '1 / -1' } }}
+            sx={{
+              ...dataCardWidthSx,
+              gridColumn: { xs: 'auto', lg: '1 / -1' },
+            }}
           >
-            <CardContent>
+            <CardContent sx={{ minWidth: 0 }}>
               <Typography variant="h6">Top Merchants</Typography>
-              <Divider sx={{ my: 1 }} />
-              <Table size="small" aria-label="Top Merchants table">
+              <Divider sx={layoutSectionDividerSx} />
+              <Box sx={tableHorizontalScrollSx}>
+                <Table
+                  size="small"
+                  aria-label="Top Merchants table"
+                  sx={[
+                    { minWidth: MERCHANTS_TABLE_MIN, width: '100%' },
+                    tableSmallScreenTextSx(theme),
+                  ]}
+                >
                 <TableHead>
                   <TableRow>
                     <TableCell>Merchant</TableCell>
@@ -125,14 +159,23 @@ export default function Analytics() {
                   )}
                 </TableBody>
               </Table>
+              </Box>
             </CardContent>
           </Card>
 
-          <Card variant="outlined">
-            <CardContent>
+          <Card variant="outlined" sx={dataCardWidthSx}>
+            <CardContent sx={{ minWidth: 0 }}>
               <Typography variant="h6">Cashflow</Typography>
-              <Divider sx={{ my: 1 }} />
-              <Table size="small" aria-label="cashflow table">
+              <Divider sx={layoutSectionDividerSx} />
+              <Box sx={tableHorizontalScrollSx}>
+                <Table
+                  size="small"
+                  aria-label="cashflow table"
+                  sx={[
+                    { minWidth: CASHFLOW_TABLE_MIN, width: '100%' },
+                    tableSmallScreenTextSx(theme),
+                  ]}
+                >
                 <TableHead>
                   <TableRow>
                     <TableCell>Month</TableCell>
@@ -161,14 +204,23 @@ export default function Analytics() {
                   })}
                 </TableBody>
               </Table>
+              </Box>
             </CardContent>
           </Card>
 
-          <Card variant="outlined">
-            <CardContent>
+          <Card variant="outlined" sx={dataCardWidthSx}>
+            <CardContent sx={{ minWidth: 0 }}>
               <Typography variant="h6">Category Breakdown</Typography>
-              <Divider sx={{ my: 1 }} />
-              <Table size="small" aria-label="Category Breakdown table">
+              <Divider sx={layoutSectionDividerSx} />
+              <Box sx={tableHorizontalScrollSx}>
+                <Table
+                  size="small"
+                  aria-label="Category Breakdown table"
+                  sx={[
+                    { minWidth: CATEGORY_TABLE_MIN, width: '100%' },
+                    tableSmallScreenTextSx(theme),
+                  ]}
+                >
                 <TableHead>
                   <TableRow>
                     <TableCell>Category</TableCell>
@@ -177,7 +229,7 @@ export default function Analytics() {
                 </TableHead>
                 <TableBody>
                   {data?.categoryBreakdown?.map((row) => (
-                    <TableRow key={row.category} hover>
+                      <TableRow key={row.category} hover>
                       <TableCell>{row.category}</TableCell>
                       <TableCell align="right">
                         <InrAmountCell value={-row.total} />
@@ -186,6 +238,7 @@ export default function Analytics() {
                   ))}
                 </TableBody>
               </Table>
+              </Box>
             </CardContent>
           </Card>
         </Box>

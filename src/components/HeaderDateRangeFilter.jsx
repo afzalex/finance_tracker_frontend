@@ -84,7 +84,7 @@ function currentYearYmd() {
  * Presets apply immediately and close. Closing via backdrop discards an unapplied draft.
  * Committed range is shared via DateRangeContext (Transactions, Unparsed Emails, Accounts, Analytics).
  */
-export default function HeaderDateRangeFilter() {
+export default function HeaderDateRangeFilter({ fullWidth = false }) {
   const { from, to, setRange } = useDateRange()
 
   const [anchorEl, setAnchorEl] = useState(null)
@@ -136,15 +136,15 @@ export default function HeaderDateRangeFilter() {
     minWidth: 0,
     maxWidth: '100%',
     justifyContent: 'center',
-    borderColor: alpha(theme.palette.divider, 0.5),
-    bgcolor: alpha(theme.palette.action.hover, 0.06),
+    borderColor: theme.palette.divider,
+    bgcolor: alpha(theme.palette.background.default, 0.65),
     '&:hover': {
-      bgcolor: alpha(theme.palette.primary.main, 0.08),
-      borderColor: alpha(theme.palette.primary.main, 0.4),
+      bgcolor: alpha(theme.palette.primary.main, 0.06),
+      borderColor: alpha(theme.palette.primary.main, 0.22),
     },
     '&:focus-visible': {
       bgcolor: alpha(theme.palette.primary.main, 0.08),
-      borderColor: alpha(theme.palette.primary.main, 0.5),
+      borderColor: alpha(theme.palette.primary.main, 0.28),
     },
     '& .MuiChip-label': {
       px: 0.5,
@@ -173,6 +173,7 @@ export default function HeaderDateRangeFilter() {
     py: 0.75,
     minWidth: 0,
     boxSizing: 'border-box',
+    ...(fullWidth ? { flex: 1, width: '50%' } : {}),
   }
 
   const chipSx = (theme) => ({
@@ -180,19 +181,20 @@ export default function HeaderDateRangeFilter() {
     alignItems: 'stretch',
     flexShrink: 0,
     minHeight: 44,
-    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+    border: `1px solid ${theme.palette.divider}`,
     borderRadius: '6px',
-    bgcolor: alpha(theme.palette.background.paper, 0.75),
+    bgcolor: alpha(theme.palette.background.default, 0.72),
     overflow: 'hidden',
     boxSizing: 'border-box',
     transition: theme.transitions.create(['border-color', 'box-shadow'], {
       duration: theme.transitions.duration.shortest,
     }),
     '&:hover': {
-      borderColor: alpha(theme.palette.primary.main, 0.35),
+      borderColor: alpha(theme.palette.primary.main, 0.22),
+      bgcolor: alpha(theme.palette.background.default, 0.88),
     },
     '&:focus-visible': {
-      outline: `2px solid ${theme.palette.primary.main}`,
+      outline: `2px solid ${alpha(theme.palette.primary.main, 0.35)}`,
       outlineOffset: 2,
     },
   })
@@ -204,9 +206,19 @@ export default function HeaderDateRangeFilter() {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`From ${ymdToDisplay(from)} to ${ymdToDisplay(to)}. Open calendar.`}
-        sx={{ borderRadius: '6px', flexShrink: 0 }}
+        sx={{
+          borderRadius: '6px',
+          flexShrink: 0,
+          ...(fullWidth ? { width: '100%', display: 'block' } : {}),
+        }}
       >
-        <Box sx={chipSx} role="presentation">
+        <Box
+          sx={(theme) => ({
+            ...chipSx(theme),
+            ...(fullWidth ? { width: '100%', minWidth: 0 } : {}),
+          })}
+          role="presentation"
+        >
           <Stack component="div" sx={chipCellSx}>
             <Typography variant="caption" sx={labelSx} component="span">
               From
@@ -247,21 +259,30 @@ export default function HeaderDateRangeFilter() {
         open={open}
         anchorEl={anchorEl}
         onClose={closePopover}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorOrigin={
+          fullWidth
+            ? { vertical: 'bottom', horizontal: 'center' }
+            : { vertical: 'bottom', horizontal: 'right' }
+        }
+        transformOrigin={
+          fullWidth
+            ? { vertical: 'top', horizontal: 'center' }
+            : { vertical: 'top', horizontal: 'right' }
+        }
         slotProps={{
           paper: {
             elevation: 0,
             sx: (theme) => ({
               mt: 1,
-              width: { xs: 'min(100vw - 16px, 380px)', sm: 380 },
-              maxWidth: 'calc(100vw - 16px)',
+              // 16px horizontal inset on each side on narrow viewports.
+              width: { xs: 'min(100vw - 32px, 380px)', sm: 380 },
+              maxWidth: 'min(380px, calc(100vw - 32px))',
               borderRadius: '6px',
               overflow: 'hidden',
-              border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
-              bgcolor: alpha(theme.palette.background.paper, 0.55),
+              border: `1px solid ${theme.palette.divider}`,
+              bgcolor: alpha(theme.palette.background.default, 0.82),
               backdropFilter: 'blur(12px)',
-              boxShadow: `0 4px 24px ${alpha(theme.palette.common.black, 0.06)}`,
+              boxShadow: `0 4px 24px ${alpha(theme.palette.common.black, 0.05)}`,
             }),
           },
         }}
@@ -272,10 +293,11 @@ export default function HeaderDateRangeFilter() {
               width: '100%',
               py: 0.5,
               px: 0.75,
-              bgcolor: alpha(theme.palette.common.white, 0.35),
+              bgcolor: alpha(theme.palette.background.default, 0.45),
               '& .rdp-root': {
-                '--rdp-accent-color': alpha(theme.palette.primary.main, 0.85),
-                '--rdp-accent-background-color': alpha(theme.palette.primary.main, 0.08),
+                '--rdp-accent-color': alpha(theme.palette.primary.main, 0.9),
+                '--rdp-accent-background-color': alpha(theme.palette.primary.main, 0.1),
+                '--rdp-selected-border': `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
                 /* Inner grid only — keep header/nav at library defaults */
                 '--rdp-day-height': '30px',
                 '--rdp-day-width': '30px',
@@ -322,8 +344,6 @@ export default function HeaderDateRangeFilter() {
             />
           </Box>
 
-          <Divider sx={{ borderColor: (t) => alpha(t.palette.divider, 0.45) }} />
-
           <Box
             sx={(theme) => ({
               px: 1,
@@ -331,7 +351,8 @@ export default function HeaderDateRangeFilter() {
               display: 'flex',
               flexDirection: 'column',
               gap: 1,
-              bgcolor: alpha(theme.palette.action.hover, 0.05),
+              bgcolor: alpha(theme.palette.background.default, 0.55),
+              borderTop: `1px solid ${theme.palette.divider}`,
             })}
           >
             <Stack spacing={0.5} sx={{ width: '100%', alignSelf: 'stretch' }}>

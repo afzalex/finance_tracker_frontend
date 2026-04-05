@@ -196,6 +196,51 @@ describe('Transactions', () => {
     expect(await screen.findByText('Coffee')).toBeInTheDocument()
   })
 
+  it('navigates to returnTo when closing detail from deep link', async () => {
+    const user = userEvent.setup()
+    const deepRow = {
+      id: 'deep-1',
+      date: '2023-10-01T12:00:00Z',
+      description: 'Deep',
+      account: 'Checking',
+      merchant: 'Acme',
+      provider: 'Plaid',
+      amount: -10,
+      amountRaw: '-$10.00',
+      raw: { merchant: 'Acme' },
+    }
+    financeApi.findTransactionRowById.mockResolvedValue(deepRow)
+    financeApi.listTransactions.mockResolvedValue({
+      items: [deepRow],
+      total: 1,
+    })
+
+    const returnTo = encodeURIComponent('/analytics')
+    renderWithTheme(
+      <MemoryRouter
+        initialEntries={[`/transactions/deep-1?returnTo=${returnTo}`]}
+      >
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+            <Route path="/analytics" element={<div>Analytics page</div>} />
+          </Routes>
+        </DateRangeProvider>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /^Close$/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.getByText('Analytics page')).toBeInTheDocument()
+    })
+  })
+
   it('renders API error message', async () => {
     financeApi.listTransactions.mockRejectedValueOnce(new Error('Transaction fetch failed'))
 

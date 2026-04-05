@@ -21,6 +21,7 @@ import {
   TableRow,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -30,7 +31,14 @@ import {
   SubType as ApiSubType,
   TransactionType as ApiTransactionType,
 } from '../../api'
+import useDetailDialogSlotProps from '../../hooks/useDetailDialogSlotProps'
 import useResource from '../../hooks/useResource'
+import { dialogActionsCompactSx } from '../../utils/dialogActionsCompactSx'
+import {
+  layoutSectionSpacing,
+  tableHorizontalScrollSx,
+  tableSmallScreenTextSx,
+} from '../../utils/responsiveTable'
 import LoadingBlock from '../LoadingBlock'
 import SortableTableHeaderCell from '../SortableTableHeaderCell'
 import {
@@ -67,6 +75,8 @@ const PRC_SORT_COL = {
 
 const PRC_SORT_FIELDS = Object.values(PRC_SORT_COL)
 
+const hideParserDefaultColsSx = { display: { xs: 'none', md: 'table-cell' } }
+
 function parseParsersSortParam(sp) {
   const raw = sp.get(PRC_SORT_Q)
   const defaults = { sortBy: PRC_SORT_COL.id, sortDir: 'asc' }
@@ -97,6 +107,8 @@ export default function ParsersSection({
   onOpenRule,
   onCloseRule,
 }) {
+  const theme = useTheme()
+  const detailSlotProps = useDetailDialogSlotProps()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const safeReturnPath = useMemo(
@@ -473,8 +485,12 @@ export default function ParsersSection({
       {status === 'loading' ? (
         <LoadingBlock />
       ) : (
-        <Box sx={{ width: '100%', overflowX: 'auto' }}>
-          <Table size="small" aria-label="parsers table">
+        <Box sx={tableHorizontalScrollSx}>
+          <Table
+            size="small"
+            aria-label="parsers table"
+            sx={tableSmallScreenTextSx(theme)}
+          >
             <TableHead>
               <TableRow>
                 <SortableTableHeaderCell
@@ -519,9 +535,13 @@ export default function ParsersSection({
                 >
                   Mail Count
                 </SortableTableHeaderCell>
-                <TableCell align="left">Default Category</TableCell>
+                <TableCell align="left" sx={hideParserDefaultColsSx}>
+                  Default Category
+                </TableCell>
                 <TableCell align="center">Self Transfer</TableCell>
-                <TableCell align="left">Default Account ID</TableCell>
+                <TableCell align="left" sx={hideParserDefaultColsSx}>
+                  Default Account ID
+                </TableCell>
                 <SortableTableHeaderCell
                   align="right"
                   sortDirection={sortBy === PRC_SORT_COL.status ? sortDir : false}
@@ -572,7 +592,7 @@ export default function ParsersSection({
                   <TableCell align="right">
                     {p.mail_count != null ? p.mail_count : '—'}
                   </TableCell>
-                  <TableCell align="left" sx={{ maxWidth: 160 }}>
+                  <TableCell align="left" sx={{ maxWidth: 160, ...hideParserDefaultColsSx }}>
                     <Typography variant="body2" noWrap title={p.default_category ?? ''}>
                       {p.default_category?.trim() ? p.default_category : '—'}
                     </Typography>
@@ -591,7 +611,7 @@ export default function ParsersSection({
                       '—'
                     )}
                   </TableCell>
-                  <TableCell align="left" sx={{ maxWidth: 200 }}>
+                  <TableCell align="left" sx={{ maxWidth: 200, ...hideParserDefaultColsSx }}>
                     <Typography
                       variant="body2"
                       noWrap
@@ -631,14 +651,22 @@ export default function ParsersSection({
         onClose={() => requestDismissParserDialog()}
         fullWidth
         maxWidth="md"
-        PaperProps={{ sx: { position: 'relative', overflow: 'visible' } }}
+        slotProps={{
+          paper: {
+            sx: [
+              { position: 'relative', overflow: 'visible' },
+              detailSlotProps.paper.sx,
+            ],
+          },
+        }}
       >
         <DialogTitle
           sx={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 2,
+            gap: 1,
+            pr: 1,
           }}
         >
           <span>{dialog.mode === 'create' ? 'Create parser' : 'Edit parser'}</span>
@@ -657,7 +685,7 @@ export default function ParsersSection({
           />
         </DialogTitle>
         <DialogContent dividers sx={{ position: 'relative' }}>
-          <Stack spacing={2}>
+          <Stack spacing={layoutSectionSpacing}>
             <Typography variant="subtitle2" color="text.secondary">
               Core
             </Typography>
@@ -958,7 +986,7 @@ export default function ParsersSection({
           </Stack>
         </DialogContent>
 
-        <DialogActions sx={{ gap: 1 }}>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button
             size="small"
             onClick={requestDismissParserDialog}
@@ -1001,6 +1029,7 @@ export default function ParsersSection({
         open={leaveReturnDialog.open}
         onClose={handleLeaveReturnStay}
         maxWidth="sm"
+        fullWidth
       >
         <DialogTitle>
           {leaveReturnDialog.path && leaveReturnDialog.variant
@@ -1022,7 +1051,7 @@ export default function ParsersSection({
               : ''}
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button size="small" onClick={handleLeaveReturnStay}>
             Stay here
           </Button>
@@ -1032,14 +1061,14 @@ export default function ParsersSection({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm">
+      <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm" fullWidth>
         <DialogTitle>Deactivate parser?</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" color="text.secondary">
             This will set <code>is_active</code> to false for this parser. Rows remain in the database.
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button size="small" variant="outlined" onClick={closeDeactivate} disabled={deactivating}>
             Cancel
           </Button>
@@ -1082,7 +1111,7 @@ function StackFormGrid({ children }) {
     <Box
       sx={{
         display: 'grid',
-        gap: 2,
+        gap: layoutSectionSpacing,
         gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
       }}
     >

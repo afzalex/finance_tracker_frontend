@@ -58,7 +58,7 @@ function DetailLine({ label, value }) {
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
       spacing={{ xs: 0, sm: 2 }}
-      sx={{ py: 0.75 }}
+      sx={{ py: { xs: 0.5, md: 0.75 } }}
     >
       <Typography
         component="span"
@@ -311,7 +311,7 @@ export default function EmailSourcePanel({
               disabled={reprocessState.status === 'loading'}
               onClick={openReprocessConfirm}
             >
-              {reprocessState.status === 'loading' ? 'Reprocessing…' : 'Reprocess Email'}
+              {reprocessState.status === 'loading' ? 'Reprocessing…' : 'Reprocess'}
             </Button>
           </Box>
         )}

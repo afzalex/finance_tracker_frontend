@@ -1,4 +1,4 @@
-import { isValidElement, useState } from 'react'
+import { isValidElement, useCallback, useState } from 'react'
 import {
   Box,
   Button,
@@ -10,6 +10,12 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
+import useDetailDialogSlotProps from '../hooks/useDetailDialogSlotProps'
+import { dialogActionsCompactSx } from '../utils/dialogActionsCompactSx'
+import {
+  layoutSectionDividerSx,
+  layoutSectionSpacing,
+} from '../utils/responsiveTable'
 import EmailSourcePanel from './EmailSourcePanel'
 import { formatDateTime, formatInrAmount } from '../utils/format'
 
@@ -24,7 +30,7 @@ function DetailLine({ label, value }) {
     <Stack
       direction={{ xs: 'column', sm: 'row' }}
       spacing={{ xs: 0, sm: 2 }}
-      sx={{ py: 0.75 }}
+      sx={{ py: { xs: 0.5, md: 0.75 } }}
     >
       <Typography
         component="span"
@@ -78,9 +84,14 @@ export default function TransactionDetailDialog({
     : 0
 
   const [detailTab, setDetailTab] = useState(initialTab ?? 'transaction')
+  const [openReprocessConfirm, setOpenReprocessConfirm] = useState(null)
+  const bindOpenReprocessConfirm = useCallback((fn) => {
+    setOpenReprocessConfirm(() => fn)
+  }, [])
+  const detailSlotProps = useDetailDialogSlotProps()
 
   const titleId =
-    detailTab === 'email' ? 'detail-source-email-title' : 'transaction-detail-title'
+    detailTab === 'email' ? 'detail-source-title' : 'transaction-detail-title'
 
   return (
     <Dialog
@@ -89,14 +100,38 @@ export default function TransactionDetailDialog({
       maxWidth="md"
       fullWidth
       scroll="paper"
+      aria-labelledby={titleId}
+      slotProps={detailSlotProps}
       TransitionProps={{
         onEnter: () => {
           if (initialTab) setDetailTab(initialTab)
         },
       }}
     >
-      <DialogTitle id={titleId}>
-        {detailTab === 'email' ? 'Source Email' : 'Transaction Details'}
+      <DialogTitle
+        component="div"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: layoutSectionSpacing,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Typography id={titleId} component="h2" variant="h6" sx={{ flex: '1 1 auto' }}>
+          {detailTab === 'email' ? 'Source' : 'Transaction Details'}
+        </Typography>
+        {detailTab === 'email' && tx?.mail_id ? (
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={typeof openReprocessConfirm !== 'function'}
+            onClick={() => openReprocessConfirm?.()}
+            sx={{ flexShrink: 0, ml: 'auto' }}
+          >
+            Reprocess
+          </Button>
+        ) : null}
       </DialogTitle>
       <DialogContent dividers>
         {tx && (
@@ -116,7 +151,7 @@ export default function TransactionDetailDialog({
               <DetailLine label="ID" value={tx.id} />
               <DetailLine label="Transacted" value={formatDateTime(tx.transacted_at)} />
               <DetailLine label="Created" value={formatDateTime(tx.created_at)} />
-              <Divider sx={{ my: 1 }} />
+              <Divider sx={layoutSectionDividerSx} />
               <DetailLine
                 label="Amount"
                 value={formatInrAmount(signed)}
@@ -124,14 +159,14 @@ export default function TransactionDetailDialog({
               <DetailLine label="Direction" value={tx.direction} />
               <DetailLine label="Amount (raw)" value={tx.amount} />
               <DetailLine label="Currency" value={tx.currency ?? row.currency} />
-              <Divider sx={{ my: 1 }} />
+              <Divider sx={layoutSectionDividerSx} />
               <DetailLine label="Provider" value={tx.provider} />
               <DetailLine label="Transaction type" value={tx.transaction_type} />
               <DetailLine label="Sub type" value={tx.sub_type} />
               <DetailLine label="Status" value={tx.status} />
               <DetailLine label="Transaction ID" value={tx.txn_id} />
               <DetailLine label="Mail ID" value={tx.mail_id} />
-              <Divider sx={{ my: 1 }} />
+              <Divider sx={layoutSectionDividerSx} />
               <DetailLine
                 label="Counterparty"
                 value={tx.counterparty_name ?? tx.merchant}
@@ -153,13 +188,15 @@ export default function TransactionDetailDialog({
                 pointerEvents: detailTab === 'email' ? 'auto' : 'none',
               }}
               aria-hidden={detailTab !== 'email'}
-              aria-labelledby="detail-source-email-title"
+              aria-labelledby="detail-source-title"
             >
               <EmailSourcePanel
                 mailId={tx.mail_id}
                 active={open && detailTab === 'email'}
                 onNotify={onNotify}
                 onReprocessSuccess={() => onClose?.()}
+                showReprocessButton={false}
+                onBindOpenReprocessConfirm={bindOpenReprocessConfirm}
               />
             </Box>
           </Box>
@@ -171,7 +208,13 @@ export default function TransactionDetailDialog({
           </Typography>
         )}
       </DialogContent>
-      <DialogActions sx={{ gap: 1, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+      <DialogActions
+        sx={{
+          flexWrap: 'wrap',
+          justifyContent: 'flex-start',
+          ...dialogActionsCompactSx,
+        }}
+      >
         <Button onClick={onClose} variant="outlined">
           Close
         </Button>
@@ -194,7 +237,7 @@ export default function TransactionDetailDialog({
           }}
           disabled={!tx?.mail_id}
         >
-          Source Email
+          Source
         </Button>
       </DialogActions>
 

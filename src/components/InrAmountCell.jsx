@@ -1,4 +1,4 @@
-import { Box } from '@mui/material'
+import { Box, useTheme } from '@mui/material'
 import { formatInrAmountParts } from '../utils/format'
 
 /**
@@ -13,6 +13,7 @@ export default function InrAmountCell({
   inline = false,
   align = 'end',
 }) {
+  const theme = useTheme()
   const { code, figure } = formatInrAmountParts(value)
   const compact = density === 'default'
   const justifyContent =
@@ -27,7 +28,14 @@ export default function InrAmountCell({
         gap: 0.5,
         width: inline ? 'auto' : '100%',
         fontVariantNumeric: 'tabular-nums',
-        ...(compact ? { typography: 'body2' } : {}),
+        ...(compact
+          ? {
+              typography: 'body2',
+              [theme.breakpoints.down('md')]: {
+                fontSize: '0.8125rem',
+              },
+            }
+          : {}),
       }}
     >
       <Box
@@ -36,6 +44,11 @@ export default function InrAmountCell({
           opacity: 0.45,
           fontWeight: 400,
           fontSize: compact ? '0.6875rem' : '0.8125rem',
+          ...(compact
+            ? {
+                [theme.breakpoints.down('md')]: { fontSize: '0.625rem' },
+              }
+            : {}),
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
           color: 'text.secondary',

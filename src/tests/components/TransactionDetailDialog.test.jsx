@@ -87,18 +87,18 @@ describe('TransactionDetailDialog', () => {
       within(dialog).getByRole('button', { name: 'Transaction' }),
     ).toBeInTheDocument()
     expect(
-      within(dialog).getByRole('button', { name: 'Source Email' }),
+      within(dialog).getByRole('button', { name: 'Source' }),
     ).toBeInTheDocument()
   })
 
-  it('disables Source Email when mail_id is missing', () => {
+  it('disables Source when mail_id is missing', () => {
     const row = makeRow()
     row.raw = { ...row.raw, mail_id: null }
     renderWithRouter(
       <TransactionDetailDialog open onClose={vi.fn()} row={row} />,
     )
     expect(
-      screen.getByRole('button', { name: 'Source Email' }),
+      screen.getByRole('button', { name: 'Source' }),
     ).toBeDisabled()
   })
 
@@ -108,7 +108,7 @@ describe('TransactionDetailDialog', () => {
       <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+    await user.click(screen.getByRole('button', { name: 'Source' }))
 
     expect(getFetchedEmailByMailId).toHaveBeenCalledWith('gmail-msg-abc')
 
@@ -117,10 +117,10 @@ describe('TransactionDetailDialog', () => {
     })
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Source Email' }),
+      screen.getByRole('heading', { level: 2, name: 'Source' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: /Reprocess Email/i }),
+      screen.getByRole('button', { name: /^Reprocess$/ }),
     ).toBeInTheDocument()
     expect(screen.getByText(/Line one/)).toBeInTheDocument()
     expect(screen.getByText(/Line two/)).toBeInTheDocument()
@@ -144,15 +144,19 @@ describe('TransactionDetailDialog', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+    await user.click(screen.getByRole('button', { name: 'Source' }))
 
-    await user.click(await screen.findByRole('button', { name: /Reprocess Email/i }))
+    await user.click(await screen.findByRole('button', { name: /^Reprocess$/ }))
 
-    expect(
-      await screen.findByRole('heading', { name: /Reprocess this email\?/i }),
-    ).toBeInTheDocument()
+    const confirmHeading = await screen.findByRole('heading', {
+      name: /Reprocess this email\?/i,
+    })
+    expect(confirmHeading).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /^Reprocess$/i }))
+    const confirmDialog = confirmHeading.closest('[role="dialog"]')
+    await user.click(
+      within(confirmDialog).getByRole('button', { name: /^Reprocess$/i }),
+    )
 
     await waitFor(() => {
       expect(vi.mocked(reprocessEmailByMailId)).toHaveBeenCalledWith('gmail-msg-abc')
@@ -187,7 +191,7 @@ describe('TransactionDetailDialog', () => {
       { initialEntries: [fromPath] },
     )
 
-    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+    await user.click(screen.getByRole('button', { name: 'Source' }))
 
     await waitFor(() => {
       expect(screen.getByText('transaction')).toBeInTheDocument()
@@ -231,7 +235,7 @@ describe('TransactionDetailDialog', () => {
       { initialEntries: [fromPath] },
     )
 
-    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+    await user.click(screen.getByRole('button', { name: 'Source' }))
 
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Create parser' })).toBeInTheDocument()
@@ -269,7 +273,7 @@ describe('TransactionDetailDialog', () => {
       { initialEntries: ['/transactions/99'] },
     )
 
-    await user.click(screen.getByRole('button', { name: 'Source Email' }))
+    await user.click(screen.getByRole('button', { name: 'Source' }))
 
     await waitFor(() => {
       expect(screen.getByText('statement')).toBeInTheDocument()

@@ -350,7 +350,7 @@ export async function findTransactionRowById(
 
 /**
  * Finds the first transaction row whose `raw.mail_id` matches (paged scan; no date filters).
- * Used to open transaction detail → Source Email from a `mail_id` deep link.
+ * Used to open transaction detail → Source tab from a `mail_id` deep link.
  */
 export async function findFirstTransactionRowByMailId(
   mailId,

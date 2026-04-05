@@ -13,6 +13,11 @@ import {
 import { Link as RouterLink } from 'react-router-dom'
 import { useState } from 'react'
 import PageHeader from '../components/PageHeader'
+import {
+  layoutMajorDividerSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+} from '../utils/responsiveTable'
 import useAppMeta from '../contexts/useAppMeta'
 import { reprocessAllEmailsOffline } from '../services/financeApi'
 
@@ -73,7 +78,7 @@ export default function Settings() {
   }
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
       <PageHeader
         title="Settings"
         description="Reprocess cached emails, manage rules, and view backend status."
@@ -83,7 +88,11 @@ export default function Settings() {
         <CardContent>
           <Typography variant="h6">API</Typography>
           {meta ? (
-            <Stack component="dl" spacing={1.25} sx={{ m: 0, mt: 2 }}>
+            <Stack
+              component="dl"
+              spacing={{ xs: 0.75, md: 1.25 }}
+              sx={{ m: 0, mt: { xs: 1, md: 2 } }}
+            >
               {META_ROWS.map((row) => {
                 const value = formatMetaValue(meta, row)
                 if (value == null) return null
@@ -117,7 +126,7 @@ export default function Settings() {
               No metadata loaded.
             </Typography>
           )}
-          <Divider sx={{ my: 2 }} />
+          <Divider sx={layoutMajorDividerSx} />
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Button
               size="small"

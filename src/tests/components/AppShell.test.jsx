@@ -1,10 +1,14 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import AppShell from '../../components/AppShell'
-import { renderWithTheme } from '../renderWithTheme'
+import { IconButton } from '@mui/material'
+import { useMediaQuery, useTheme } from '@mui/material'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { useMediaQuery } from '@mui/material'
+import { Menu } from 'lucide-react'
+import AppShell from '../../components/AppShell'
+import { MobileNavProvider } from '../../contexts/MobileNavProvider'
+import { useMobileNavDrawer } from '../../contexts/useMobileNavDrawer'
+import { renderWithTheme } from '../renderWithTheme'
 
 vi.mock('@mui/material', async (importOriginal) => {
   const actual = await importOriginal()
@@ -14,18 +18,33 @@ vi.mock('@mui/material', async (importOriginal) => {
   }
 })
 
+/** Mirrors RootLayout: menu opens the drawer (tests do not mount RootLayout). */
+function TestMobileNavMenuButton() {
+  const theme = useTheme()
+  const isSmDown = useMediaQuery(theme.breakpoints.down('md'))
+  const { setMobileOpen } = useMobileNavDrawer()
+  if (!isSmDown) return null
+  return (
+    <IconButton aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
+      <Menu size={22} />
+    </IconButton>
+  )
+}
+
 describe('AppShell', () => {
   it('renders correctly on desktop', () => {
     vi.mocked(useMediaQuery).mockReturnValue(false) // Not small screen -> Desktop
 
     renderWithTheme(
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route index element={<div>Body</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
+      <MobileNavProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route index element={<div>Body</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </MobileNavProvider>,
     )
 
     expect(screen.getByText('Dashboard')).toBeInTheDocument()
@@ -40,13 +59,16 @@ describe('AppShell', () => {
     const user = userEvent.setup()
 
     renderWithTheme(
-      <MemoryRouter initialEntries={['/accounts']}>
-        <Routes>
-          <Route element={<AppShell />}>
-            <Route path="accounts" element={<div>Accounts body</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>
+      <MobileNavProvider>
+        <MemoryRouter initialEntries={['/accounts']}>
+          <TestMobileNavMenuButton />
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="accounts" element={<div>Accounts body</div>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </MobileNavProvider>,
     )
 
     // Hamburger menu should be present

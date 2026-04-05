@@ -18,6 +18,11 @@ import {
 } from 'react-router-dom'
 import ClassificationsSection from '../components/rules/ClassificationsSection'
 import ParsersSection from '../components/rules/ParsersSection'
+import {
+  dataCardWidthSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+} from '../utils/responsiveTable'
 
 function rulesQuerySuffix(searchParams) {
   const sp = new URLSearchParams(searchParams)
@@ -118,15 +123,15 @@ export default function RulesPage() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Card variant="outlined">
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
+      <Card variant="outlined" sx={dataCardWidthSx}>
         <Box
           sx={{
             px: 2,
             pt: 1,
             display: 'flex',
             alignItems: 'center',
-            gap: 2,
+            gap: layoutSectionSpacing,
             flexWrap: 'wrap',
             justifyContent: 'space-between',
           }}

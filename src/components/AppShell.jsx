@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   Box,
   Drawer,
-  IconButton,
   List,
   ListItemButton,
   ListItemIcon,
@@ -18,9 +17,9 @@ import {
   LayoutDashboard,
   List as ListIcon,
   Mail,
-  Menu,
   Settings,
 } from 'lucide-react'
+import { useMobileNavDrawer } from '../contexts/useMobileNavDrawer'
 
 const drawerWidth = 240
 
@@ -28,7 +27,7 @@ export default function AppShell() {
   const theme = useTheme()
   const isSmDown = useMediaQuery(theme.breakpoints.down('md'))
   const location = useLocation()
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const { mobileOpen, setMobileOpen } = useMobileNavDrawer()
 
   const navItems = useMemo(
     () => [
@@ -53,7 +52,7 @@ export default function AppShell() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+    <Box sx={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0, maxWidth: '100%' }}>
       <Box component="nav" sx={{ width: { md: drawerWidth }, flexShrink: 0 }}>
         <Drawer
           variant={isSmDown ? 'temporary' : 'permanent'}
@@ -97,18 +96,17 @@ export default function AppShell() {
         </Drawer>
       </Box>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          minWidth: 0,
+          maxWidth: '100%',
+          px: { xs: 1.5, sm: 2, md: 3 },
+          py: { xs: 1, sm: 2, md: 3 },
+        }}
+      >
         <Toolbar />
-        {isSmDown && (
-          <IconButton
-            aria-label="Open navigation"
-            edge="start"
-            onClick={() => setMobileOpen(true)}
-            sx={{ mb: 2 }}
-          >
-            <Menu size={22} />
-          </IconButton>
-        )}
         <Outlet />
       </Box>
     </Box>

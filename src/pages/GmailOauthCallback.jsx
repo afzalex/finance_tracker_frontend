@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Box, CircularProgress, Stack, Toolbar, Typography, Button } from '@mui/material'
 import { adminApi } from '../services/apiConfig'
 import { apiErrorMessage } from '../services/financeApi'
+import { layoutSectionSpacing } from '../utils/responsiveTable'
 
 export default function GmailOauthCallback() {
   const navigate = useNavigate()
@@ -52,7 +53,7 @@ export default function GmailOauthCallback() {
         }}
       >
         <Toolbar />
-        <Stack spacing={2} sx={{ maxWidth: 720, width: '100%' }}>
+        <Stack spacing={layoutSectionSpacing} sx={{ maxWidth: 720, width: '100%' }}>
           <Typography variant="h5" component="h1">
             OAuth initialization failed
           </Typography>
@@ -81,7 +82,7 @@ export default function GmailOauthCallback() {
       }}
     >
       <Toolbar />
-      <Stack spacing={2} alignItems="center">
+      <Stack spacing={layoutSectionSpacing} alignItems="center">
         <CircularProgress />
         <Typography variant="body2" color="text.secondary">
           Finishing OAuth…

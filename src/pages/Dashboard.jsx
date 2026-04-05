@@ -11,7 +11,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink, useLocation } from 'react-router-dom'
 import InrAmountCell from '../components/InrAmountCell'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
@@ -24,6 +24,12 @@ import {
 import useResource from '../hooks/useResource'
 import { signedAmountSx } from '../utils/moneySx'
 import { formatDate } from '../utils/format'
+import {
+  layoutSectionDividerBottomSx,
+  layoutSectionMarginBottomSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+} from '../utils/responsiveTable'
 
 const RECENT_TX_PAGE_SIZE = 8
 const RECENT_MAIL_LIMIT = 5
@@ -195,6 +201,10 @@ function StatCard({ title, value, subtitle, to }) {
 }
 
 export default function Dashboard() {
+  const location = useLocation()
+  const transactionReturnTo = encodeURIComponent(
+    `${location.pathname}${location.search}`,
+  )
   const [monthRange, setMonthRange] = useState(() => calendarMonthRangeYmd())
 
   useEffect(() => {
@@ -275,7 +285,7 @@ export default function Dashboard() {
   const recentMailItems = recentMails ?? []
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
       <PageHeader
         title="Dashboard"
       />
@@ -290,7 +300,10 @@ export default function Dashboard() {
         <Box
           sx={{
             display: 'grid',
-            gap: 2,
+            gap: layoutSectionSpacing,
+            minWidth: 0,
+            maxWidth: '100%',
+            width: '100%',
             gridTemplateColumns: {
               xs: '1fr',
               sm: '1fr 1fr',
@@ -309,20 +322,22 @@ export default function Dashboard() {
       <Box
         sx={{
           display: 'grid',
-          gap: 2,
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gap: layoutSectionSpacing,
+          minWidth: 0,
+          maxWidth: '100%',
           width: '100%',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
           alignItems: 'stretch',
         }}
       >
         <Card variant="outlined" sx={{ minWidth: 0, height: '100%' }}>
           <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
+            <Typography variant="h6" sx={layoutSectionMarginBottomSx}>
               Recent Transactions
             </Typography>
-            <Divider sx={{ mb: 1 }} />
+            <Divider sx={layoutSectionDividerBottomSx} />
             {recentTxError && (
-              <Alert severity="error" sx={{ mb: 1 }}>
+              <Alert severity="error" sx={layoutSectionMarginBottomSx}>
                 {recentTxError}
               </Alert>
             )}
@@ -340,13 +355,13 @@ export default function Dashboard() {
                   <Link
                     key={item.id}
                     component={RouterLink}
-                    to={`/transactions/${encodeURIComponent(item.id)}`}
+                    to={`/transactions/${encodeURIComponent(item.id)}?returnTo=${transactionReturnTo}`}
                     underline="none"
                     color="inherit"
                     aria-label={`Open transaction: ${recentActivityPrimary(item)}`}
                     sx={{
                       display: 'block',
-                      py: 1.25,
+                      py: { xs: 0.875, md: 1.25 },
                       px: 1,
                       mx: -1,
                       '&:hover': { bgcolor: 'action.hover' },
@@ -357,7 +372,7 @@ export default function Dashboard() {
                         display: 'flex',
                         alignItems: 'baseline',
                         justifyContent: 'space-between',
-                        gap: 1.5,
+                        gap: { xs: 1, md: 1.5 },
                         mb: 0.375,
                       }}
                     >
@@ -413,9 +428,9 @@ export default function Dashboard() {
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
               Cached messages with linked transactions (newest activity first).
             </Typography>
-            <Divider sx={{ mb: 1 }} />
+            <Divider sx={layoutSectionDividerBottomSx} />
             {recentMailError && (
-              <Alert severity="error" sx={{ mb: 1 }}>
+              <Alert severity="error" sx={layoutSectionMarginBottomSx}>
                 {recentMailError}
               </Alert>
             )}

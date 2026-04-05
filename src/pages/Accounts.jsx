@@ -14,6 +14,8 @@ import {
   TableRow,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AccountDetailDialog from '../components/AccountDetailDialog'
@@ -26,6 +28,15 @@ import useResource from '../hooks/useResource'
 import { listAccounts } from '../services/financeApi'
 import InrAmountCell from '../components/InrAmountCell'
 import { balanceAmountSx } from '../utils/moneySx'
+import {
+  dataCardWidthSx,
+  layoutSectionSpacing,
+  pageStackWidthSx,
+  tableHorizontalScrollSx,
+  tableSmallScreenTextSx,
+} from '../utils/responsiveTable'
+
+const ACCOUNTS_TABLE_MIN_WIDTH = 1040
 
 /** Persisted in URL on the accounts page (same pattern as transactions `sort`). */
 const ACC_SORT_Q = 'acc_sort'
@@ -75,6 +86,8 @@ function defaultDirForAccSortKey(key) {
 const EMPTY_ACCOUNTS = []
 
 export default function Accounts() {
+  const theme = useTheme()
+  const isMdDown = useMediaQuery(theme.breakpoints.down('md'))
   const navigate = useNavigate()
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -207,29 +220,38 @@ export default function Accounts() {
   )
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={layoutSectionSpacing} sx={pageStackWidthSx}>
       <Stack
-        direction="row"
-        alignItems="center"
+        direction={{ xs: 'column', md: 'row' }}
+        alignItems={{ xs: 'stretch', md: 'center' }}
         justifyContent="space-between"
-        flexWrap="wrap"
-        gap={2}
+        gap={layoutSectionSpacing}
       >
         <PageHeader title="Accounts" />
-        <Box sx={{ flexShrink: 0 }}>
-          <HeaderDateRangeFilter />
+        <Box sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: { md: 0 } }}>
+          <HeaderDateRangeFilter fullWidth={isMdDown} />
         </Box>
       </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Card variant="outlined">
-        <CardContent>
+      <Card variant="outlined" sx={dataCardWidthSx}>
+        <CardContent sx={{ minWidth: 0 }}>
           {status === 'loading' ? (
             <LoadingBlock />
           ) : (
-            <Box sx={{ width: '100%', overflowX: 'auto' }}>
-              <Table size="small" aria-label="accounts table">
+            <Box sx={tableHorizontalScrollSx}>
+              <Table
+                size="small"
+                aria-label="accounts table"
+                sx={[
+                  {
+                    minWidth: ACCOUNTS_TABLE_MIN_WIDTH,
+                    tableLayout: 'auto',
+                  },
+                  tableSmallScreenTextSx(theme),
+                ]}
+              >
                 <TableHead>
                   <TableRow>
                     <TableCell align="center" sx={{ width: 44, px: 0.5 }}>
@@ -294,6 +316,16 @@ export default function Accounts() {
                     <SortableTableHeaderCell
                       align="right"
                       sx={{ whiteSpace: 'nowrap' }}
+                      sortDirection={sortBy === ACC_SORT_COL.count ? sortDir : false}
+                      active={sortBy === ACC_SORT_COL.count}
+                      direction={sortBy === ACC_SORT_COL.count ? sortDir : 'asc'}
+                      onSort={() => toggleAccSort(ACC_SORT_COL.count)}
+                    >
+                      Count
+                    </SortableTableHeaderCell>
+                    <SortableTableHeaderCell
+                      align="right"
+                      sx={{ whiteSpace: 'nowrap' }}
                       sortDirection={sortBy === ACC_SORT_COL.debits ? sortDir : false}
                       active={sortBy === ACC_SORT_COL.debits}
                       direction={sortBy === ACC_SORT_COL.debits ? sortDir : 'asc'}
@@ -320,16 +352,6 @@ export default function Accounts() {
                       onSort={() => toggleAccSort(ACC_SORT_COL.net)}
                     >
                       Net
-                    </SortableTableHeaderCell>
-                    <SortableTableHeaderCell
-                      align="right"
-                      sx={{ whiteSpace: 'nowrap' }}
-                      sortDirection={sortBy === ACC_SORT_COL.count ? sortDir : false}
-                      active={sortBy === ACC_SORT_COL.count}
-                      direction={sortBy === ACC_SORT_COL.count ? sortDir : 'asc'}
-                      onSort={() => toggleAccSort(ACC_SORT_COL.count)}
-                    >
-                      Count
                     </SortableTableHeaderCell>
                   </TableRow>
                 </TableHead>
@@ -385,6 +407,9 @@ export default function Accounts() {
                       </TableCell>
                       <TableCell>{a.type}</TableCell>
                       <TableCell align="right">
+                        {a.count != null ? a.count : '—'}
+                      </TableCell>
+                      <TableCell align="right">
                         <InrAmountCell value={a.debitTotal ?? 0} />
                       </TableCell>
                       <TableCell align="right">
@@ -395,9 +420,6 @@ export default function Accounts() {
                         sx={balanceAmountSx(a.net ?? a.balance)}
                       >
                         <InrAmountCell value={a.net ?? a.balance} />
-                      </TableCell>
-                      <TableCell align="right">
-                        {a.count != null ? a.count : '—'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -415,10 +437,13 @@ export default function Accounts() {
                   <TableFooter
                     sx={{
                       '& .MuiTableCell-root': {
-                        borderTop: (theme) => `3px solid ${theme.palette.divider}`,
+                        borderTop: (t) => `3px solid ${t.palette.divider}`,
                         borderBottom: 'none',
                         py: 1.5,
                         fontSize: '0.875rem',
+                        [theme.breakpoints.down('md')]: {
+                          fontSize: '0.8125rem',
+                        },
                       },
                     }}
                   >
@@ -439,15 +464,6 @@ export default function Accounts() {
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <InrAmountCell value={totals.debits} totalRow />
-                      </TableCell>
-                      <TableCell align="right">
-                        <InrAmountCell value={totals.credits} totalRow />
-                      </TableCell>
-                      <TableCell align="right" sx={balanceAmountSx(totals.net)}>
-                        <InrAmountCell value={totals.net} totalRow />
-                      </TableCell>
-                      <TableCell align="right">
                         <Typography
                           variant="body2"
                           fontWeight={700}
@@ -456,6 +472,18 @@ export default function Accounts() {
                         >
                           {totals.count}
                         </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <InrAmountCell value={totals.debits} totalRow />
+                      </TableCell>
+                      <TableCell align="right">
+                        <InrAmountCell value={totals.credits} totalRow />
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={balanceAmountSx(totals.net)}
+                      >
+                        <InrAmountCell value={totals.net} totalRow />
                       </TableCell>
                     </TableRow>
                   </TableFooter>

@@ -17,6 +17,9 @@ import {
   Typography,
 } from '@mui/material'
 import { AccountType as ApiAccountType } from '../api'
+import useDetailDialogSlotProps from '../hooks/useDetailDialogSlotProps'
+import { dialogActionsCompactSx } from '../utils/dialogActionsCompactSx'
+import { layoutSectionSpacing } from '../utils/responsiveTable'
 import LoadingBlock from './LoadingBlock'
 import { upsertAccount } from '../services/financeApi'
 
@@ -120,10 +123,18 @@ export default function AccountDetailDialog({
 
   const loading = listStatus === 'loading'
   const notFound = listStatus === 'success' && !account && open
+  const detailSlotProps = useDetailDialogSlotProps()
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth scroll="paper">
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+        slotProps={detailSlotProps}
+      >
         <DialogTitle>Account</DialogTitle>
         <DialogContent dividers>
           {loading ? (
@@ -134,7 +145,7 @@ export default function AccountDetailDialog({
               It may have been removed or the ID may be wrong.
             </Alert>
           ) : account ? (
-            <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Stack spacing={layoutSectionSpacing} sx={{ pt: 0.5 }}>
               <TextField
                 size="small"
                 label="Account ID"
@@ -176,7 +187,7 @@ export default function AccountDetailDialog({
                   </FormControl>
                 </>
               ) : (
-                <Stack spacing={2} direction={{ xs: 'column', sm: 'row' }}>
+                <Stack spacing={layoutSectionSpacing} direction={{ xs: 'column', sm: 'row' }}>
                   <TextField
                     size="small"
                     label="Provider"
@@ -217,7 +228,7 @@ export default function AccountDetailDialog({
             </Stack>
           ) : null}
         </DialogContent>
-        <DialogActions sx={{ gap: 1 }}>
+        <DialogActions sx={dialogActionsCompactSx}>
           <Button size="small" onClick={onClose} disabled={saving}>
             Close
           </Button>
