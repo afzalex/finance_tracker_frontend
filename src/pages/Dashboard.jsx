@@ -1,22 +1,43 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import {
   Alert,
   Box,
   Card,
+  CardActionArea,
   CardContent,
   CircularProgress,
   Divider,
+  Link,
   Stack,
   Typography,
 } from '@mui/material'
+import { Link as RouterLink } from 'react-router-dom'
+import InrAmountCell from '../components/InrAmountCell'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
-import { getDashboardStats, listTransactions } from '../services/financeApi'
+import {
+  getDashboardStats,
+  getTransactionSummary,
+  listTopEmailsWithTransactions,
+  listTransactions,
+} from '../services/financeApi'
 import useResource from '../hooks/useResource'
 import { signedAmountSx } from '../utils/moneySx'
-import { formatDate, formatMoney } from '../utils/format'
+import { formatDate } from '../utils/format'
 
 const RECENT_TX_PAGE_SIZE = 8
+const RECENT_MAIL_LIMIT = 5
+
+/** Inclusive YYYY-MM-DD range for the calendar month containing `d` (local). */
+function calendarMonthRangeYmd(d = new Date()) {
+  const y = d.getFullYear()
+  const monthIndex = d.getMonth()
+  const pad = (n) => String(n).padStart(2, '0')
+  const from = `${y}-${pad(monthIndex + 1)}-01`
+  const lastDay = new Date(y, monthIndex + 1, 0).getDate()
+  const to = `${y}-${pad(monthIndex + 1)}-${pad(lastDay)}`
+  return { from, to }
+}
 
 function recentActivityPrimary(row) {
   const c = row?.counterparty_name ?? row?.merchant
@@ -57,35 +78,153 @@ function recentActivityMetaLine(item) {
   return parts.join(' · ')
 }
 
-function StatCard({ title, value, subtitle }) {
-  return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Typography variant="overline" color="text.secondary">
-          {title}
-        </Typography>
-        <Typography variant="h5" sx={{ mt: 0.5 }}>
-          {value}
-        </Typography>
-        {subtitle && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {subtitle}
-          </Typography>
+function recentMailPrimary(e) {
+  const sub = e.subject != null && String(e.subject).trim() !== ''
+    ? String(e.subject).trim()
+    : ''
+  if (sub) return sub
+  const sn = e.snippet != null && String(e.snippet).trim() !== ''
+    ? String(e.snippet).trim()
+    : ''
+  if (sn) return sn
+  const mid = e.mail_id != null && String(e.mail_id).trim() !== ''
+    ? String(e.mail_id).trim()
+    : ''
+  return mid || '—'
+}
+
+function recentMailMetaLine(e) {
+  const parts = [formatDate(e.last_transacted_at)]
+  const sender = e.sender != null && String(e.sender).trim() !== ''
+    ? String(e.sender).trim()
+    : ''
+  if (sender) parts.push(sender)
+  const n = e.transaction_count
+  if (n != null && Number.isFinite(Number(n))) {
+    const c = Number(n)
+    parts.push(`${c} transaction${c === 1 ? '' : 's'}`)
+  }
+  const cls = e.enrichment?.classification_name
+  if (cls != null && String(cls).trim() !== '') {
+    parts.push(String(cls).trim())
+  }
+  return parts.join(' · ')
+}
+
+function recentMailSnippetLine(e) {
+  const sub = e.subject != null && String(e.subject).trim() !== ''
+    ? String(e.subject).trim()
+    : ''
+  const sn = e.snippet != null && String(e.snippet).trim() !== ''
+    ? String(e.snippet).trim()
+    : ''
+  if (!sub || !sn || sn === sub) return null
+  return sn
+}
+
+function recentMailHasSubject(e) {
+  return e.subject != null && String(e.subject).trim() !== ''
+}
+
+/** Body preview: max 2 lines (snippet, or primary line when there is no subject). */
+const recentMailBodyClampSx = {
+  overflow: 'hidden',
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 2,
+  wordBreak: 'break-word',
+}
+
+function StatCard({ title, value, subtitle, to }) {
+  const content = (
+    <CardContent sx={{ textAlign: 'center', width: '100%' }}>
+      <Typography variant="overline" color="text.secondary" sx={{ display: 'block' }}>
+        {title}
+      </Typography>
+      <Box
+        sx={{
+          mt: 0.5,
+          display: 'flex',
+          justifyContent: 'center',
+          width: '100%',
+        }}
+      >
+        {typeof value === 'string' ? (
+          <Typography variant="h5">{value}</Typography>
+        ) : (
+          value
         )}
-      </CardContent>
+      </Box>
+      {subtitle && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          {subtitle}
+        </Typography>
+      )}
+    </CardContent>
+  )
+
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {to ? (
+        <CardActionArea
+          component={RouterLink}
+          to={to}
+          aria-label={`Open analytics: ${title}`}
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            justifyContent: 'flex-start',
+          }}
+        >
+          {content}
+        </CardActionArea>
+      ) : (
+        content
+      )}
     </Card>
   )
 }
 
 export default function Dashboard() {
-  const { status: statsStatus, data: stats, error: statsError } = useResource(
-    'dashboardStats',
-    getDashboardStats,
+  const [monthRange, setMonthRange] = useState(() => calendarMonthRangeYmd())
+
+  useEffect(() => {
+    const tick = () => {
+      const next = calendarMonthRangeYmd()
+      setMonthRange((prev) =>
+        prev.from === next.from && prev.to === next.to ? prev : next,
+      )
+    }
+    const id = setInterval(tick, 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const {
+    status: totalsStatus,
+    data: totals,
+    error: totalsError,
+  } = useResource(
+    `dashboardTransactionSummary:${monthRange.from}|${monthRange.to}`,
+    () => getTransactionSummary(monthRange),
   )
   const {
-    status: recentStatus,
-    data: recentData,
-    error: recentError,
+    status: miscStatus,
+    data: miscStats,
+    error: miscError,
+  } = useResource('dashboardMiscStats', getDashboardStats)
+  const {
+    status: recentTxStatus,
+    data: recentTxData,
+    error: recentTxError,
   } = useResource('dashboardRecentTransactions', () =>
     listTransactions({
       page: 1,
@@ -94,31 +233,46 @@ export default function Dashboard() {
       sortOrder: 'desc',
     }),
   )
+  const {
+    status: recentMailStatus,
+    data: recentMails,
+    error: recentMailError,
+  } = useResource('dashboardRecentMail', () =>
+    listTopEmailsWithTransactions({ limit: RECENT_MAIL_LIMIT }),
+  )
 
   const summary = useMemo(() => {
-    if (!stats) return null
+    if (!totals || !miscStats) return null
     return [
       {
         title: 'Net (This Month)',
-        value: formatMoney(stats.netThisMonth),
-        subtitle: 'Income - Expenses',
+        value: <InrAmountCell value={totals.net} density="emphasized" align="center" />,
+        to: '/analytics',
       },
       {
         title: 'Income (This Month)',
-        value: formatMoney(stats.incomeThisMonth),
+        value: (
+          <InrAmountCell value={totals.totalCredit} density="emphasized" align="center" />
+        ),
+        to: '/analytics',
       },
       {
         title: 'Expenses (This Month)',
-        value: formatMoney(stats.expenseThisMonth),
+        value: (
+          <InrAmountCell value={totals.totalDebit} density="emphasized" align="center" />
+        ),
+        to: '/analytics',
       },
       {
         title: 'Top Category',
-        value: stats.topCategory,
+        value: miscStats.topCategory,
+        to: '/analytics',
       },
     ]
-  }, [stats])
+  }, [totals, miscStats])
 
-  const recentItems = recentData?.items ?? []
+  const recentTxItems = recentTxData?.items ?? []
+  const recentMailItems = recentMails ?? []
 
   return (
     <Stack spacing={2}>
@@ -126,9 +280,11 @@ export default function Dashboard() {
         title="Dashboard"
       />
 
-      {statsError && <Alert severity="error">{statsError}</Alert>}
+      {(totalsError || miscError) && (
+        <Alert severity="error">{totalsError || miscError}</Alert>
+      )}
 
-      {statsStatus === 'loading' ? (
+      {totalsStatus === 'loading' || miscStatus === 'loading' ? (
         <LoadingBlock />
       ) : (
         <Box
@@ -150,82 +306,195 @@ export default function Dashboard() {
         </Box>
       )}
 
-      <Card
-        variant="outlined"
-        sx={{ maxWidth: 560, width: '100%', alignSelf: 'flex-start' }}
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          width: '100%',
+          alignItems: 'stretch',
+        }}
       >
-        <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Recent Activity
-          </Typography>
-          <Divider sx={{ mb: 1 }} />
-          {recentError && (
-            <Alert severity="error" sx={{ mb: 1 }}>
-              {recentError}
-            </Alert>
-          )}
-          {recentStatus === 'loading' ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress size={28} />
-            </Box>
-          ) : recentItems.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No recent transactions.
+        <Card variant="outlined" sx={{ minWidth: 0, height: '100%' }}>
+          <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Recent Transactions
             </Typography>
-          ) : (
-            <Stack divider={<Divider flexItem />} spacing={0}>
-              {recentItems.map((item) => (
-                <Box key={item.id} sx={{ py: 1.25 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'baseline',
-                      justifyContent: 'space-between',
-                      gap: 1.5,
-                      mb: 0.375,
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      fontWeight={600}
-                      sx={{
-                        minWidth: 0,
-                        flex: '1 1 auto',
-                        lineHeight: 1.35,
-                        pr: 0.5,
-                      }}
-                    >
-                      {recentActivityPrimary(item)}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        ...signedAmountSx(item.amount),
-                        flexShrink: 0,
-                        fontVariantNumeric: 'tabular-nums',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {formatMoney(item.amount, item.currency)}
-                    </Typography>
-                  </Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
+            <Divider sx={{ mb: 1 }} />
+            {recentTxError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {recentTxError}
+              </Alert>
+            )}
+            {recentTxStatus === 'loading' ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : recentTxItems.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No recent transactions.
+              </Typography>
+            ) : (
+              <Stack divider={<Divider flexItem />} spacing={0}>
+                {recentTxItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    component={RouterLink}
+                    to={`/transactions/${encodeURIComponent(item.id)}`}
+                    underline="none"
+                    color="inherit"
+                    aria-label={`Open transaction: ${recentActivityPrimary(item)}`}
                     sx={{
                       display: 'block',
-                      lineHeight: 1.45,
-                      wordBreak: 'break-word',
+                      py: 1.25,
+                      px: 1,
+                      mx: -1,
+                      '&:hover': { bgcolor: 'action.hover' },
                     }}
                   >
-                    {recentActivityMetaLine(item)}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        gap: 1.5,
+                        mb: 0.375,
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        sx={{
+                          minWidth: 0,
+                          flex: '1 1 auto',
+                          lineHeight: 1.35,
+                          pr: 0.5,
+                        }}
+                      >
+                        {recentActivityPrimary(item)}
+                      </Typography>
+                      <Box
+                        sx={{
+                          flexShrink: 0,
+                          whiteSpace: 'nowrap',
+                          maxWidth: '50%',
+                        }}
+                      >
+                        <InrAmountCell
+                          inline
+                          value={item.amount}
+                          figureSx={signedAmountSx(item.amount)}
+                        />
+                      </Box>
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        display: 'block',
+                        lineHeight: 1.45,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {recentActivityMetaLine(item)}
+                    </Typography>
+                  </Link>
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" sx={{ minWidth: 0, alignSelf: 'start', width: '100%' }}>
+          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <Typography variant="h6" sx={{ mb: 0.25 }}>
+              Recent Mails
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              Cached messages with linked transactions (newest activity first).
+            </Typography>
+            <Divider sx={{ mb: 1 }} />
+            {recentMailError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {recentMailError}
+              </Alert>
+            )}
+            {recentMailStatus === 'loading' ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : recentMailItems.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No mail with transactions yet.
+              </Typography>
+            ) : (
+              <Stack divider={<Divider flexItem />} spacing={0}>
+                {recentMailItems.map((item) => {
+                  const snippet = recentMailSnippetLine(item)
+                  const hasSubject = recentMailHasSubject(item)
+                  return (
+                    <Link
+                      key={`${item.mail_id}:${item.id}`}
+                      component={RouterLink}
+                      to={`/transactions?mail_id=${encodeURIComponent(item.mail_id)}&tab=email`}
+                      underline="none"
+                      color="inherit"
+                      aria-label={`Open source email: ${recentMailPrimary(item)}`}
+                      sx={{
+                        display: 'block',
+                        py: 0.875,
+                        px: 1,
+                        mx: -1,
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        sx={{
+                          minWidth: 0,
+                          lineHeight: 1.35,
+                          wordBreak: 'break-word',
+                          ...(!hasSubject ? recentMailBodyClampSx : {}),
+                        }}
+                      >
+                        {recentMailPrimary(item)}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          display: 'block',
+                          lineHeight: 1.45,
+                          wordBreak: 'break-word',
+                          mt: 0.375,
+                        }}
+                      >
+                        {recentMailMetaLine(item)}
+                      </Typography>
+                      {snippet ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: 'block',
+                            lineHeight: 1.45,
+                            mt: 0.25,
+                            opacity: 0.92,
+                            ...recentMailBodyClampSx,
+                          }}
+                        >
+                          {snippet}
+                        </Typography>
+                      ) : null}
+                    </Link>
+                  )
+                })}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+      </Box>
     </Stack>
   )
 }

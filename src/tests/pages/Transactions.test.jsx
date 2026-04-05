@@ -10,6 +10,7 @@ import * as financeApi from '../../services/financeApi'
 vi.mock('../../services/financeApi', () => ({
   listTransactions: vi.fn(),
   findTransactionRowById: vi.fn(),
+  findFirstTransactionRowByMailId: vi.fn().mockResolvedValue(null),
   listTransactionDistinctCatalog: vi.fn(),
 }))
 

@@ -11,7 +11,7 @@ import {
   Typography,
 } from '@mui/material'
 import EmailSourcePanel from './EmailSourcePanel'
-import { formatDateTime, formatMoney } from '../utils/format'
+import { formatDateTime, formatInrAmount } from '../utils/format'
 
 function DetailLine({ label, value }) {
   const display =
@@ -119,7 +119,7 @@ export default function TransactionDetailDialog({
               <Divider sx={{ my: 1 }} />
               <DetailLine
                 label="Amount"
-                value={formatMoney(signed, row.currency ?? tx.currency ?? 'USD')}
+                value={formatInrAmount(signed)}
               />
               <DetailLine label="Direction" value={tx.direction} />
               <DetailLine label="Amount (raw)" value={tx.amount} />

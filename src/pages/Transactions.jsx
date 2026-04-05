@@ -29,6 +29,7 @@ import PageHeader from '../components/PageHeader'
 import TransactionDetailDialog from '../components/TransactionDetailDialog'
 import {
   apiErrorMessage,
+  findFirstTransactionRowByMailId,
   findTransactionRowById,
   listTransactionDistinctCatalog,
   listTransactions,
@@ -87,6 +88,7 @@ const TX_Q = {
   provider: 'provider',
   direction: 'direction',
   sort: 'sort',
+  mail_id: 'mail_id',
 }
 
 function parseTxSortParam(sp) {
@@ -118,6 +120,7 @@ export default function Transactions() {
   const query = searchParams.get(TX_Q.q) ?? ''
   const providerFilter = searchParams.get(TX_Q.provider) ?? ''
   const directionFilter = searchParams.get(TX_Q.direction) ?? ''
+  const mailIdParam = (searchParams.get(TX_Q.mail_id) ?? '').trim()
   const page = useMemo(() => {
     const n = Number(searchParams.get('page'))
     return Number.isFinite(n) && n >= 0 ? n : 0
@@ -134,6 +137,10 @@ export default function Transactions() {
   const [selectedRow, setSelectedRow] = useState(null)
   const suppressRouteOpenRef = useRef(false)
   const [snack, setSnack] = useState({ open: false, message: '' })
+  const [routeOpenError, setRouteOpenError] = useState(null)
+  const [routeOpening, setRouteOpening] = useState(false)
+  const [mailLinkError, setMailLinkError] = useState(null)
+  const [mailLinkResolving, setMailLinkResolving] = useState(false)
 
   useEffect(() => {
     setSearchParams(
@@ -250,8 +257,40 @@ export default function Transactions() {
     if (!routeTransactionId) suppressRouteOpenRef.current = false
   }, [routeTransactionId])
 
-  const [routeOpenError, setRouteOpenError] = useState(null)
-  const [routeOpening, setRouteOpening] = useState(false)
+  useEffect(() => {
+    if (!mailIdParam || routeTransactionId) {
+      setMailLinkError(null)
+      setMailLinkResolving(false)
+      return
+    }
+    let cancelled = false
+    setMailLinkResolving(true)
+    setMailLinkError(null)
+    findFirstTransactionRowByMailId(mailIdParam)
+      .then((found) => {
+        if (cancelled) return
+        if (!found) {
+          setMailLinkError(
+            'No transaction found for this mail message in the scanned pages.',
+          )
+          setMailLinkResolving(false)
+          return
+        }
+        const sp = new URLSearchParams(searchParams)
+        sp.delete(TX_Q.mail_id)
+        sp.set('tab', 'email')
+        navigate(`/transactions/${found.id}?${sp.toString()}`, { replace: true })
+        setMailLinkResolving(false)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setMailLinkError(apiErrorMessage(e))
+        setMailLinkResolving(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mailIdParam, routeTransactionId, navigate, searchParams])
 
   useEffect(() => {
     if (!routeTransactionId) {
@@ -448,6 +487,7 @@ export default function Transactions() {
 
       {error && <Alert severity="error">{error}</Alert>}
       {routeOpenError && <Alert severity="warning">{routeOpenError}</Alert>}
+      {mailLinkError && <Alert severity="warning">{mailLinkError}</Alert>}
 
       <Card variant="outlined">
         <CardContent>
@@ -461,7 +501,7 @@ export default function Transactions() {
 
           {status === 'loading' ? (
             <LoadingBlock />
-          ) : routeOpening ? (
+          ) : routeOpening || mailLinkResolving ? (
             <LoadingBlock />
           ) : (
             <Box sx={{ width: '100%', overflowX: 'auto' }}>

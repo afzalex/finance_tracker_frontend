@@ -2,6 +2,7 @@ import { mockAnalytics, mockStats, mockTransactions } from '../mocks/mockData'
 import {
   accountsApi,
   adminApi,
+  analyticsApi,
   emailsApi,
   metadataApi,
   transactionsApi,
@@ -36,6 +37,24 @@ export async function getFetchedEmailByMailId(mailId) {
 
   const res = await emailsApi.getEmailByMailIdApiV1EmailsMailIdGet(raw)
   return res.data
+}
+
+/**
+ * GET /api/v1/emails/top-with-transactions — cached emails with enrichment that have ledger rows (same `mail_id`).
+ * @param {{ limit?: number }} [opts]
+ * @returns {Promise<import('../api').FetchedEmailWithLinkedTransactionsRead[]>}
+ */
+export async function listTopEmailsWithTransactions({ limit = 8 } = {}) {
+  const lim = Math.min(100, Math.max(1, Number(limit) || 8))
+  try {
+    const res =
+      await emailsApi.topEmailsWithTransactionsApiV1EmailsTopWithTransactionsGet(
+        lim,
+      )
+    return res.data ?? []
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
 }
 
 /**
@@ -112,7 +131,7 @@ function mapTransactionRow(tx) {
       tx.amount != null && String(tx.amount).trim() !== ''
         ? String(tx.amount)
         : '—',
-    currency: tx.currency ?? 'USD',
+    currency: tx.currency ?? 'INR',
     raw: tx,
   }
 }
@@ -120,6 +139,45 @@ function mapTransactionRow(tx) {
 export async function getDashboardStats() {
   await sleep(150)
   return mockStats
+}
+
+/**
+ * GET /api/v1/analytics/transaction-summary — credit/debit sums, net, and counts
+ * (same filters as list transactions). `from` / `to` are YYYY-MM-DD, inclusive.
+ * @param {{ from: string, to: string }} opts
+ * @returns {Promise<{ net: number, totalCredit: number, totalDebit: number, count: number, creditCount: number, debitCount: number }>}
+ */
+export async function getTransactionSummary({ from, to } = {}) {
+  const fromParam = normalizeYmd(from)
+  const toParam = normalizeYmd(to)
+  if (!fromParam || !toParam) {
+    throw new Error('from and to dates (YYYY-MM-DD) are required')
+  }
+  try {
+    const res =
+      await analyticsApi.transactionSummaryApiV1AnalyticsTransactionSummaryGet(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        fromParam,
+        toParam,
+        undefined,
+        undefined,
+        undefined,
+      )
+    const d = res.data
+    return {
+      net: d.amount ?? 0,
+      totalCredit: d.credit_amount ?? 0,
+      totalDebit: d.debit_amount ?? 0,
+      count: d.count ?? 0,
+      creditCount: d.credit_count ?? 0,
+      debitCount: d.debit_count ?? 0,
+    }
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
 }
 
 /**
@@ -171,7 +229,7 @@ export async function listAccounts({ from, to } = {}) {
         net,
         balance: net,
         count: a.count,
-        currency: 'USD',
+        currency: 'INR',
         hasConflict,
         raw: a,
       }
@@ -290,6 +348,33 @@ export async function findTransactionRowById(
   return null
 }
 
+/**
+ * Finds the first transaction row whose `raw.mail_id` matches (paged scan; no date filters).
+ * Used to open transaction detail → Source Email from a `mail_id` deep link.
+ */
+export async function findFirstTransactionRowByMailId(
+  mailId,
+  { pageSize = 25, maxPages = 40 } = {},
+) {
+  const mid = String(mailId ?? '').trim()
+  if (!mid) throw new Error('Missing mail id')
+
+  for (let p = 1; p <= maxPages; p += 1) {
+    const res = await listTransactions({
+      page: p,
+      pageSize,
+    })
+    const match = (res.items ?? []).find(
+      (t) =>
+        t.raw?.mail_id != null && String(t.raw.mail_id).trim() === mid,
+    )
+    if (match) return match
+    if ((res.items ?? []).length === 0) break
+  }
+
+  return null
+}
+
 /** GET /api/v1/transactions/distinct — provider / merchant / counterparty pickers. */
 export async function listTransactionDistinctCatalog() {
   const res =
@@ -325,25 +410,54 @@ export async function getAnalytics({ from, to } = {}) {
   )
 
   const categoryBreakdownMap = Object.create(null)
-  const topMerchantsMap = Object.create(null)
   for (const tx of mockTransactions) {
     if (tx.date < fromP || tx.date > toP) continue
     if (tx.amount < 0) {
       const spend = -tx.amount
       const cat = tx.category || '—'
-      const mer = tx.merchant || '—'
       categoryBreakdownMap[cat] = (categoryBreakdownMap[cat] || 0) + spend
-      topMerchantsMap[mer] = (topMerchantsMap[mer] || 0) + spend
     }
   }
   const categoryBreakdown = Object.entries(categoryBreakdownMap)
     .map(([category, total]) => ({ category, total }))
     .sort((a, b) => b.total - a.total)
-  const topMerchants = Object.entries(topMerchantsMap)
-    .map(([merchant, total]) => ({ merchant, total }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 20)
 
-  return { cashflow, categoryBreakdown, topMerchants }
+  return { cashflow, categoryBreakdown }
+}
+
+const DEFAULT_TOP_MERCHANTS_LIMIT = 50
+
+/**
+ * GET /api/v1/analytics/top-merchants — top merchants by spend for the date range.
+ * When `from` and `to` fall in the same calendar month, passes `month=YYYY-MM`; otherwise omits `month` (backend default window).
+ * @param {{ from: string, to: string, limit?: number }} opts
+ * @returns {Promise<Array<{ merchant: string, total: number, transactionCount: number }>>}
+ */
+export async function listTopMerchants({ from, to, limit = DEFAULT_TOP_MERCHANTS_LIMIT } = {}) {
+  const fromP = normalizeYmd(from)
+  const toP = normalizeYmd(to)
+  if (!fromP || !toP) {
+    throw new Error('from and to dates (YYYY-MM-DD) are required')
+  }
+  const month =
+    fromP.slice(0, 7) === toP.slice(0, 7) ? fromP.slice(0, 7) : undefined
+  try {
+    const res = await analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet(
+      month,
+      limit,
+    )
+    return (res.data ?? []).map((row) => {
+      const m = row.merchant
+      const merchant =
+        m != null && String(m).trim() !== '' ? String(m).trim() : '—'
+      return {
+        merchant,
+        total: row.total ?? 0,
+        transactionCount: row.transaction_count ?? 0,
+      }
+    })
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
 }
 

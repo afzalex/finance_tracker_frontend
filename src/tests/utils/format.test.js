@@ -34,7 +34,7 @@ describe('formatDateTime', () => {
 })
 
 describe('formatMoney', () => {
-  it('formats USD by default', () => {
+  it('formats INR by default', () => {
     const out = formatMoney(1234.5)
     expect(out).toMatch(/1/)
     expect(out).toMatch(/234/)

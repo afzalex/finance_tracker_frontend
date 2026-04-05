@@ -3,6 +3,7 @@ import {
   Box,
   Card,
   CardContent,
+  CircularProgress,
   Divider,
   Stack,
   Table,
@@ -14,13 +15,13 @@ import {
 } from '@mui/material'
 import { useMemo } from 'react'
 import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
+import InrAmountCell from '../components/InrAmountCell'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
 import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
-import { getAnalytics } from '../services/financeApi'
+import { getAnalytics, listTopMerchants } from '../services/financeApi'
 import { signedAmountSx } from '../utils/moneySx'
-import { formatMoney } from '../utils/format'
 
 export default function Analytics() {
   const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
@@ -32,6 +33,17 @@ export default function Analytics() {
     `analytics:${analyticsKey}`,
     () => getAnalytics({ from: dateRangeFrom, to: dateRangeTo }),
   )
+  const {
+    status: merchantsStatus,
+    data: topMerchants,
+    error: merchantsError,
+  } = useResource(
+    `analyticsTopMerchants:${analyticsKey}`,
+    () =>
+      listTopMerchants({ from: dateRangeFrom, to: dateRangeTo }),
+  )
+
+  const tablesLoading = status === 'loading'
 
   return (
     <Stack spacing={2}>
@@ -51,8 +63,11 @@ export default function Analytics() {
       </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
+      {merchantsError && (
+        <Alert severity="error">{merchantsError}</Alert>
+      )}
 
-      {status === 'loading' ? (
+      {tablesLoading ? (
         <LoadingBlock />
       ) : (
         <Box
@@ -62,6 +77,57 @@ export default function Analytics() {
             gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
           }}
         >
+          <Card
+            variant="outlined"
+            sx={{ gridColumn: { xs: 'auto', lg: '1 / -1' } }}
+          >
+            <CardContent>
+              <Typography variant="h6">Top Merchants</Typography>
+              <Divider sx={{ my: 1 }} />
+              <Table size="small" aria-label="Top Merchants table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Merchant</TableCell>
+                    <TableCell align="right">Txns</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {merchantsStatus === 'loading' ? (
+                    <TableRow>
+                      <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
+                        <CircularProgress size={28} />
+                      </TableCell>
+                    </TableRow>
+                  ) : (topMerchants?.length ?? 0) === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3}>
+                        <Typography variant="body2" color="text.secondary">
+                          No merchant data for this range.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    topMerchants.map((row, i) => (
+                      <TableRow key={`${row.merchant}:${i}`} hover>
+                        <TableCell>{row.merchant}</TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ fontVariantNumeric: 'tabular-nums' }}
+                        >
+                          {row.transactionCount}
+                        </TableCell>
+                        <TableCell align="right">
+                          <InrAmountCell value={-row.total} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6">Cashflow</Typography>
@@ -81,12 +147,14 @@ export default function Analytics() {
                     return (
                       <TableRow key={row.month} hover>
                         <TableCell>{row.month}</TableCell>
-                        <TableCell align="right">{formatMoney(row.income)}</TableCell>
                         <TableCell align="right">
-                          {formatMoney(-row.expense)}
+                          <InrAmountCell value={row.income} />
                         </TableCell>
-                        <TableCell align="right" sx={signedAmountSx(net)}>
-                          {formatMoney(net)}
+                        <TableCell align="right">
+                          <InrAmountCell value={-row.expense} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <InrAmountCell value={net} figureSx={signedAmountSx(net)} />
                         </TableCell>
                       </TableRow>
                     )
@@ -98,9 +166,9 @@ export default function Analytics() {
 
           <Card variant="outlined">
             <CardContent>
-              <Typography variant="h6">Category breakdown</Typography>
+              <Typography variant="h6">Category Breakdown</Typography>
               <Divider sx={{ my: 1 }} />
-              <Table size="small" aria-label="category breakdown table">
+              <Table size="small" aria-label="Category Breakdown table">
                 <TableHead>
                   <TableRow>
                     <TableCell>Category</TableCell>
@@ -111,42 +179,8 @@ export default function Analytics() {
                   {data?.categoryBreakdown?.map((row) => (
                     <TableRow key={row.category} hover>
                       <TableCell>{row.category}</TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {formatMoney(-row.total)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Card
-            variant="outlined"
-            sx={{ gridColumn: { xs: 'auto', lg: '1 / -1' } }}
-          >
-            <CardContent>
-              <Typography variant="h6">Top merchants</Typography>
-              <Divider sx={{ my: 1 }} />
-              <Table size="small" aria-label="top merchants table">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Merchant</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {data?.topMerchants?.map((row) => (
-                    <TableRow key={row.merchant} hover>
-                      <TableCell>{row.merchant}</TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{ fontVariantNumeric: 'tabular-nums' }}
-                      >
-                        {formatMoney(-row.total)}
+                      <TableCell align="right">
+                        <InrAmountCell value={-row.total} />
                       </TableCell>
                     </TableRow>
                   ))}

@@ -20,7 +20,7 @@ export function formatDateTime(isoDate) {
   })
 }
 
-export function formatMoney(amount, currency = 'USD') {
+export function formatMoney(amount, currency = 'INR') {
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency,

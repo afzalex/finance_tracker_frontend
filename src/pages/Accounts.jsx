@@ -24,50 +24,8 @@ import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
 import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { listAccounts } from '../services/financeApi'
+import InrAmountCell from '../components/InrAmountCell'
 import { balanceAmountSx } from '../utils/moneySx'
-import { formatInrAmountParts } from '../utils/format'
-
-function InrAmountCell({ value, totalRow = false }) {
-  const { code, figure } = formatInrAmountParts(value)
-  return (
-    <Box
-      component="span"
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'baseline',
-        justifyContent: 'flex-end',
-        gap: 0.5,
-        width: '100%',
-        fontVariantNumeric: 'tabular-nums',
-        typography: 'body2',
-      }}
-    >
-      <Box
-        component="span"
-        sx={{
-          opacity: 0.45,
-          fontWeight: 400,
-          fontSize: '0.6875rem',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          color: 'text.secondary',
-          flexShrink: 0,
-        }}
-      >
-        {code}
-      </Box>
-      <Box
-        component="span"
-        sx={{
-          fontWeight: totalRow ? 700 : 600,
-          color: totalRow ? 'text.primary' : 'inherit',
-        }}
-      >
-        {figure}
-      </Box>
-    </Box>
-  )
-}
 
 /** Persisted in URL on the accounts page (same pattern as transactions `sort`). */
 const ACC_SORT_Q = 'acc_sort'
