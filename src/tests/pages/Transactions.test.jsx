@@ -196,6 +196,37 @@ describe('Transactions', () => {
     expect(await screen.findByText('Coffee')).toBeInTheDocument()
   })
 
+  it('uses from and to from the URL for the list request', async () => {
+    financeApi.listTransactions.mockResolvedValue({
+      items: [],
+      total: 0,
+    })
+
+    renderWithTheme(
+      <MemoryRouter
+        initialEntries={[
+          '/transactions?from=2024-06-01&to=2024-06-30&page=0&ps=25',
+        ]}
+      >
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(financeApi.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '2024-06-01',
+          to: '2024-06-30',
+        }),
+      )
+    })
+  })
+
   it('navigates to returnTo when closing detail from deep link', async () => {
     const user = userEvent.setup()
     const deepRow = {

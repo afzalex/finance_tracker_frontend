@@ -12,6 +12,7 @@ import {
   Typography,
 } from '@mui/material'
 import { Link as RouterLink, useLocation } from 'react-router-dom'
+import useDateRange from '../contexts/useDateRange'
 import InrAmountCell from '../components/InrAmountCell'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
@@ -30,6 +31,7 @@ import {
   layoutSectionSpacing,
   pageStackWidthSx,
 } from '../utils/responsiveTable'
+import { DATE_RANGE_Q, pathWithDateRangeQuery } from '../utils/dateRangeUrl'
 
 const RECENT_TX_PAGE_SIZE = 8
 const RECENT_MAIL_LIMIT = 5
@@ -84,7 +86,8 @@ function recentActivityMetaLine(item) {
   return parts.join(' · ')
 }
 
-function recentMailPrimary(e) {
+/** Subject line, or snippet / mail id when there is no subject. */
+function recentMailSubjectDisplay(e) {
   const sub = e.subject != null && String(e.subject).trim() !== ''
     ? String(e.subject).trim()
     : ''
@@ -99,22 +102,27 @@ function recentMailPrimary(e) {
   return mid || '—'
 }
 
-function recentMailMetaLine(e) {
-  const parts = [formatDate(e.last_transacted_at)]
+function recentMailActivityDateLabel(e) {
+  const raw = e.last_transacted_at
+  if (raw == null || String(raw).trim() === '') return '—'
+  return formatDate(raw)
+}
+
+/** Sender, classification, cached date — not transaction counts (section context). */
+function recentMailSecondaryAttributes(e) {
+  const parts = []
   const sender = e.sender != null && String(e.sender).trim() !== ''
     ? String(e.sender).trim()
     : ''
   if (sender) parts.push(sender)
-  const n = e.transaction_count
-  if (n != null && Number.isFinite(Number(n))) {
-    const c = Number(n)
-    parts.push(`${c} transaction${c === 1 ? '' : 's'}`)
-  }
   const cls = e.enrichment?.classification_name
   if (cls != null && String(cls).trim() !== '') {
     parts.push(String(cls).trim())
   }
-  return parts.join(' · ')
+  if (e.created_at != null && String(e.created_at).trim() !== '') {
+    parts.push(`Cached ${formatDate(e.created_at)}`)
+  }
+  return parts.length ? parts.join(' · ') : null
 }
 
 function recentMailSnippetLine(e) {
@@ -202,9 +210,7 @@ function StatCard({ title, value, subtitle, to }) {
 
 export default function Dashboard() {
   const location = useLocation()
-  const transactionReturnTo = encodeURIComponent(
-    `${location.pathname}${location.search}`,
-  )
+  const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
   const [monthRange, setMonthRange] = useState(() => calendarMonthRangeYmd())
 
   useEffect(() => {
@@ -253,33 +259,37 @@ export default function Dashboard() {
 
   const summary = useMemo(() => {
     if (!totals || !miscStats) return null
+    const analyticsTo = pathWithDateRangeQuery('/analytics', {
+      from: dateRangeFrom,
+      to: dateRangeTo,
+    })
     return [
       {
         title: 'Net (This Month)',
         value: <InrAmountCell value={totals.net} density="emphasized" align="center" />,
-        to: '/analytics',
+        to: analyticsTo,
       },
       {
         title: 'Income (This Month)',
         value: (
           <InrAmountCell value={totals.totalCredit} density="emphasized" align="center" />
         ),
-        to: '/analytics',
+        to: analyticsTo,
       },
       {
         title: 'Expenses (This Month)',
         value: (
           <InrAmountCell value={totals.totalDebit} density="emphasized" align="center" />
         ),
-        to: '/analytics',
+        to: analyticsTo,
       },
       {
         title: 'Top Category',
         value: miscStats.topCategory,
-        to: '/analytics',
+        to: analyticsTo,
       },
     ]
-  }, [totals, miscStats])
+  }, [totals, miscStats, dateRangeFrom, dateRangeTo])
 
   const recentTxItems = recentTxData?.items ?? []
   const recentMailItems = recentMails ?? []
@@ -351,11 +361,16 @@ export default function Dashboard() {
               </Typography>
             ) : (
               <Stack divider={<Divider flexItem />} spacing={0}>
-                {recentTxItems.map((item) => (
+                {recentTxItems.map((item) => {
+                  const txDetailSp = new URLSearchParams()
+                  txDetailSp.set('returnTo', `${location.pathname}${location.search}`)
+                  txDetailSp.set(DATE_RANGE_Q.from, dateRangeFrom)
+                  txDetailSp.set(DATE_RANGE_Q.to, dateRangeTo)
+                  return (
                   <Link
                     key={item.id}
                     component={RouterLink}
-                    to={`/transactions/${encodeURIComponent(item.id)}?returnTo=${transactionReturnTo}`}
+                    to={`/transactions/${encodeURIComponent(item.id)}?${txDetailSp.toString()}`}
                     underline="none"
                     color="inherit"
                     aria-label={`Open transaction: ${recentActivityPrimary(item)}`}
@@ -414,7 +429,8 @@ export default function Dashboard() {
                       {recentActivityMetaLine(item)}
                     </Typography>
                   </Link>
-                ))}
+                  )
+                })}
               </Stack>
             )}
           </CardContent>
@@ -447,14 +463,23 @@ export default function Dashboard() {
                 {recentMailItems.map((item) => {
                   const snippet = recentMailSnippetLine(item)
                   const hasSubject = recentMailHasSubject(item)
+                  const subjectTitle = recentMailSubjectDisplay(item)
+                  const activityDate = recentMailActivityDateLabel(item)
+                  const secondary = recentMailSecondaryAttributes(item)
+                  const mailTxSp = new URLSearchParams()
+                  mailTxSp.set('mail_id', String(item.mail_id))
+                  mailTxSp.set('tab', 'email')
+                  mailTxSp.set('returnTo', `${location.pathname}${location.search}`)
+                  mailTxSp.set(DATE_RANGE_Q.from, dateRangeFrom)
+                  mailTxSp.set(DATE_RANGE_Q.to, dateRangeTo)
                   return (
                     <Link
                       key={`${item.mail_id}:${item.id}`}
                       component={RouterLink}
-                      to={`/transactions?mail_id=${encodeURIComponent(item.mail_id)}&tab=email`}
+                      to={`/transactions?${mailTxSp.toString()}`}
                       underline="none"
                       color="inherit"
-                      aria-label={`Open source email: ${recentMailPrimary(item)}`}
+                      aria-label={`Open source email: ${subjectTitle}, last activity ${activityDate}`}
                       sx={{
                         display: 'block',
                         py: 0.875,
@@ -464,29 +489,44 @@ export default function Dashboard() {
                       }}
                     >
                       <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        component="div"
+                        sx={{
+                          lineHeight: 1.45,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        Last activity · {activityDate}
+                      </Typography>
+                      <Typography
                         variant="body2"
                         fontWeight={600}
                         sx={{
                           minWidth: 0,
                           lineHeight: 1.35,
                           wordBreak: 'break-word',
+                          mt: 0.25,
                           ...(!hasSubject ? recentMailBodyClampSx : {}),
                         }}
                       >
-                        {recentMailPrimary(item)}
+                        {subjectTitle}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{
-                          display: 'block',
-                          lineHeight: 1.45,
-                          wordBreak: 'break-word',
-                          mt: 0.375,
-                        }}
-                      >
-                        {recentMailMetaLine(item)}
-                      </Typography>
+                      {secondary ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="div"
+                          sx={{
+                            display: 'block',
+                            lineHeight: 1.45,
+                            wordBreak: 'break-word',
+                            mt: 0.375,
+                          }}
+                        >
+                          {secondary}
+                        </Typography>
+                      ) : null}
                       {snippet ? (
                         <Typography
                           variant="caption"

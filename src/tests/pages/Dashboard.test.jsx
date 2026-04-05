@@ -1,6 +1,7 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import Dashboard from '../../pages/Dashboard'
 import { renderWithTheme } from '../renderWithTheme'
 import * as financeApi from '../../services/financeApi'
@@ -77,7 +78,9 @@ describe('Dashboard', () => {
 
     renderWithTheme(
       <MemoryRouter>
-        <Dashboard />
+        <DateRangeProvider>
+          <Dashboard />
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -90,7 +93,11 @@ describe('Dashboard', () => {
     const netAnalyticsLink = screen.getByRole('link', {
       name: 'Open analytics: Net (This Month)',
     })
-    expect(netAnalyticsLink).toHaveAttribute('href', '/analytics')
+    const analyticsHref = netAnalyticsLink.getAttribute('href')
+    expect(analyticsHref).toMatch(/^\/analytics\?/)
+    const analyticsSp = new URLSearchParams(analyticsHref.split('?')[1] ?? '')
+    expect(analyticsSp.get('from')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(analyticsSp.get('to')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
 
     expect(screen.getByText('Net (This Month)')).toBeInTheDocument()
     expect(screen.getByText('1,000.00')).toBeInTheDocument()
@@ -113,7 +120,20 @@ describe('Dashboard', () => {
     expect(screen.getByText('-150.00')).toBeInTheDocument()
     expect(screen.getByText(/Your Whole Foods receipt/)).toBeInTheDocument()
     expect(screen.getByText(/Thanks for your purchase/)).toBeInTheDocument()
-    expect(screen.getByText(/1 transaction/)).toBeInTheDocument()
+
+    const recentMailLink = screen.getByRole('link', {
+      name: /Open source email: Your Whole Foods receipt/,
+    })
+    expect(within(recentMailLink).getByText(/Last activity/)).toBeInTheDocument()
+    expect(within(recentMailLink).getByText(/receipts@wholefoods\.com/)).toBeInTheDocument()
+    expect(within(recentMailLink).getByText(/Groceries/)).toBeInTheDocument()
+    expect(within(recentMailLink).getByText(/Cached/)).toBeInTheDocument()
+    const mailHref = recentMailLink.getAttribute('href')
+    expect(mailHref).toMatch(/^\/transactions\?/)
+    const mailSp = new URLSearchParams(mailHref.split('?')[1] ?? '')
+    expect(mailSp.get('mail_id')).toBe('msg-abc')
+    expect(mailSp.get('tab')).toBe('email')
+    expect(mailSp.get('returnTo')).toBe('/')
 
     expect(financeApi.listTransactions).toHaveBeenCalledWith({
       page: 1,
@@ -136,7 +156,9 @@ describe('Dashboard', () => {
 
     renderWithTheme(
       <MemoryRouter>
-        <Dashboard />
+        <DateRangeProvider>
+          <Dashboard />
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 

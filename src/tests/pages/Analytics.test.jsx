@@ -1,5 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import Analytics from '../../pages/Analytics'
 import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import { renderWithTheme } from '../renderWithTheme'
@@ -9,6 +10,18 @@ vi.mock('../../services/financeApi', () => ({
   getAnalytics: vi.fn(),
   listTopMerchants: vi.fn(),
 }))
+
+function renderAnalytics(path = '/analytics') {
+  return renderWithTheme(
+    <MemoryRouter initialEntries={[path]}>
+      <DateRangeProvider>
+        <Routes>
+          <Route path="analytics" element={<Analytics />} />
+        </Routes>
+      </DateRangeProvider>
+    </MemoryRouter>,
+  )
+}
 
 describe('Analytics', () => {
   beforeEach(() => {
@@ -30,11 +43,7 @@ describe('Analytics', () => {
       { merchant: 'Amazon', total: 500, transactionCount: 3 },
     ])
 
-    renderWithTheme(
-      <DateRangeProvider>
-        <Analytics />
-      </DateRangeProvider>,
-    )
+    renderAnalytics()
 
     await waitFor(() => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
@@ -70,11 +79,7 @@ describe('Analytics', () => {
   it('renders error message when API fails', async () => {
     financeApi.getAnalytics.mockRejectedValueOnce(new Error('Failed analytics'))
 
-    renderWithTheme(
-      <DateRangeProvider>
-        <Analytics />
-      </DateRangeProvider>,
-    )
+    renderAnalytics()
 
     await waitFor(() => {
       expect(screen.getByText('Failed analytics')).toBeInTheDocument()
@@ -88,11 +93,7 @@ describe('Analytics', () => {
     })
     financeApi.listTopMerchants.mockRejectedValueOnce(new Error('Bad merchants'))
 
-    renderWithTheme(
-      <DateRangeProvider>
-        <Analytics />
-      </DateRangeProvider>,
-    )
+    renderAnalytics()
 
     await waitFor(() => {
       expect(screen.getByText('Bad merchants')).toBeInTheDocument()

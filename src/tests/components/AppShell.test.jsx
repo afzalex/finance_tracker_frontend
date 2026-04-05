@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { IconButton } from '@mui/material'
@@ -6,6 +6,7 @@ import { useMediaQuery, useTheme } from '@mui/material'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import AppShell from '../../components/AppShell'
+import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import { MobileNavProvider } from '../../contexts/MobileNavProvider'
 import { useMobileNavDrawer } from '../../contexts/useMobileNavDrawer'
 import { renderWithTheme } from '../renderWithTheme'
@@ -38,11 +39,13 @@ describe('AppShell', () => {
     renderWithTheme(
       <MobileNavProvider>
         <MemoryRouter initialEntries={['/']}>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route index element={<div>Body</div>} />
-            </Route>
-          </Routes>
+          <DateRangeProvider>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route index element={<div>Body</div>} />
+              </Route>
+            </Routes>
+          </DateRangeProvider>
         </MemoryRouter>
       </MobileNavProvider>,
     )
@@ -54,6 +57,34 @@ describe('AppShell', () => {
     expect(screen.queryByLabelText('Open navigation')).not.toBeInTheDocument()
   })
 
+  it('preserves from/to on date-scoped nav links from the current route', async () => {
+    vi.mocked(useMediaQuery).mockReturnValue(false)
+
+    renderWithTheme(
+      <MobileNavProvider>
+        <MemoryRouter
+          initialEntries={['/transactions?from=2024-06-01&to=2024-06-30']}
+        >
+          <DateRangeProvider>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path="transactions" element={<div>Tx</div>} />
+              </Route>
+            </Routes>
+          </DateRangeProvider>
+        </MemoryRouter>
+      </MobileNavProvider>,
+    )
+
+    await waitFor(() => {
+      const analytics = screen.getByText('Analytics').closest('a')
+      expect(analytics).toHaveAttribute(
+        'href',
+        '/analytics?from=2024-06-01&to=2024-06-30',
+      )
+    })
+  })
+
   it('renders correctly on mobile and handles drawer', async () => {
     vi.mocked(useMediaQuery).mockReturnValue(true) // Is small screen -> Mobile
     const user = userEvent.setup()
@@ -61,12 +92,14 @@ describe('AppShell', () => {
     renderWithTheme(
       <MobileNavProvider>
         <MemoryRouter initialEntries={['/accounts']}>
-          <TestMobileNavMenuButton />
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path="accounts" element={<div>Accounts body</div>} />
-            </Route>
-          </Routes>
+          <DateRangeProvider>
+            <TestMobileNavMenuButton />
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path="accounts" element={<div>Accounts body</div>} />
+              </Route>
+            </Routes>
+          </DateRangeProvider>
         </MemoryRouter>
       </MobileNavProvider>,
     )

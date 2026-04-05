@@ -164,6 +164,7 @@ export default function Transactions() {
   const [routeOpening, setRouteOpening] = useState(false)
   const [mailLinkError, setMailLinkError] = useState(null)
   const [mailLinkResolving, setMailLinkResolving] = useState(false)
+  const [listRefreshKey, setListRefreshKey] = useState(0)
 
   useEffect(() => {
     setSearchParams(
@@ -226,8 +227,9 @@ export default function Transactions() {
         rowsPerPage,
         from: dateRangeFrom,
         to: dateRangeTo,
+        refresh: listRefreshKey,
       }),
-    [searchParams, page, rowsPerPage, dateRangeFrom, dateRangeTo],
+    [searchParams, page, rowsPerPage, dateRangeFrom, dateRangeTo, listRefreshKey],
   )
   const resourceKey = `transactions:${listSearchKey}`
   const { status, data, error } = useResource(resourceKey, () =>
@@ -763,6 +765,7 @@ export default function Transactions() {
           openDetail(selectedRow, t)
         }}
         onNotify={(message) => setSnack({ open: true, message })}
+        onReprocessComplete={() => setListRefreshKey((k) => k + 1)}
       />
 
       <Portal>

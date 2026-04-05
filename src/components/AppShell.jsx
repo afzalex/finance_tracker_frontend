@@ -1,5 +1,10 @@
 import { useMemo } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import useDateRange from '../contexts/useDateRange'
+import {
+  pathWithDateRangeQuery,
+  SHARED_DATE_RANGE_NAV_PATHS,
+} from '../utils/dateRangeUrl'
 import {
   Box,
   Drawer,
@@ -28,6 +33,7 @@ export default function AppShell() {
   const isSmDown = useMediaQuery(theme.breakpoints.down('md'))
   const location = useLocation()
   const { mobileOpen, setMobileOpen } = useMobileNavDrawer()
+  const { from, to } = useDateRange()
 
   const navItems = useMemo(
     () => [
@@ -43,6 +49,17 @@ export default function AppShell() {
       { label: 'Settings', to: '/settings', icon: <Settings size={20} /> },
     ],
     [],
+  )
+
+  const navLinkTargets = useMemo(
+    () =>
+      navItems.map((item) => ({
+        ...item,
+        linkTo: SHARED_DATE_RANGE_NAV_PATHS.has(item.to)
+          ? pathWithDateRangeQuery(item.to, { from, to })
+          : item.to,
+      })),
+    [from, to, navItems],
   )
 
   const isActive = (to) => {
@@ -78,11 +95,11 @@ export default function AppShell() {
         >
           <Toolbar />
           <List>
-            {navItems.map((item) => (
+            {navLinkTargets.map((item) => (
               <ListItemButton
                 key={item.to}
                 component={Link}
-                to={item.to}
+                to={item.linkTo}
                 selected={isActive(item.to)}
                 onClick={() => {
                   if (isSmDown) setMobileOpen(false)

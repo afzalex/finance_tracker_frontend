@@ -91,6 +91,20 @@ describe('TransactionDetailDialog', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows Reprocess in the header on Transaction tab when mail_id is set', async () => {
+    renderWithRouter(
+      <TransactionDetailDialog open onClose={vi.fn()} row={makeRow()} />,
+    )
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Transaction Details' }),
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /^Reprocess$/ }),
+      ).toBeEnabled()
+    })
+  })
+
   it('disables Source when mail_id is missing', () => {
     const row = makeRow()
     row.raw = { ...row.raw, mail_id: null }

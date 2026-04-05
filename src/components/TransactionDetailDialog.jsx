@@ -75,6 +75,8 @@ export default function TransactionDetailDialog({
   initialTab,
   onTabChange,
   onNotify,
+  /** After successful email reprocess: refresh lists, then dialog calls `onClose`. */
+  onReprocessComplete,
 }) {
   const tx = row?.raw
   const signed = tx
@@ -121,7 +123,7 @@ export default function TransactionDetailDialog({
         <Typography id={titleId} component="h2" variant="h6" sx={{ flex: '1 1 auto' }}>
           {detailTab === 'email' ? 'Source' : 'Transaction Details'}
         </Typography>
-        {detailTab === 'email' && tx?.mail_id ? (
+        {tx?.mail_id ? (
           <Button
             size="small"
             variant="outlined"
@@ -194,7 +196,10 @@ export default function TransactionDetailDialog({
                 mailId={tx.mail_id}
                 active={open && detailTab === 'email'}
                 onNotify={onNotify}
-                onReprocessSuccess={() => onClose?.()}
+                onReprocessSuccess={() => {
+                  onReprocessComplete?.()
+                  onClose?.()
+                }}
                 showReprocessButton={false}
                 onBindOpenReprocessConfirm={bindOpenReprocessConfirm}
               />
