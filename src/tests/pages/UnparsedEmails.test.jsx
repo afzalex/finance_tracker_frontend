@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import UnparsedEmails from '../../pages/UnparsedEmails'
+import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import { renderWithTheme } from '../renderWithTheme'
 
 vi.mock('../../services/financeApi', async (importOriginal) => {
@@ -64,10 +65,12 @@ describe('UnparsedEmails', () => {
     const user = userEvent.setup()
     renderWithTheme(
       <MemoryRouter initialEntries={['/emails/unparsed']}>
+        <DateRangeProvider>
         <Routes>
           <Route path="/emails/unparsed" element={<UnparsedEmails />} />
           <Route path="/emails/unparsed/:mailId" element={<UnparsedEmails />} />
         </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -132,10 +135,12 @@ describe('UnparsedEmails', () => {
     const user = userEvent.setup()
     renderWithTheme(
       <MemoryRouter initialEntries={['/emails/unparsed']}>
+        <DateRangeProvider>
         <Routes>
           <Route path="/emails/unparsed" element={<UnparsedEmails />} />
           <Route path="/emails/unparsed/:mailId" element={<UnparsedEmails />} />
         </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -201,9 +206,11 @@ describe('UnparsedEmails', () => {
     const user = userEvent.setup()
     renderWithTheme(
       <MemoryRouter initialEntries={['/emails/unparsed']}>
+        <DateRangeProvider>
         <Routes>
           <Route path="/emails/unparsed" element={<UnparsedEmails />} />
         </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -259,9 +266,11 @@ describe('UnparsedEmails', () => {
     const user = userEvent.setup()
     renderWithTheme(
       <MemoryRouter initialEntries={['/emails/unparsed']}>
+        <DateRangeProvider>
         <Routes>
           <Route path="/emails/unparsed" element={<UnparsedEmails />} />
         </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -302,9 +311,11 @@ describe('UnparsedEmails', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/emails/unparsed?q=beta']}>
+        <DateRangeProvider>
         <Routes>
           <Route path="/emails/unparsed" element={<UnparsedEmails />} />
         </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -343,9 +354,11 @@ describe('UnparsedEmails', () => {
     const user = userEvent.setup()
     renderWithTheme(
       <MemoryRouter initialEntries={['/emails/unparsed']}>
+        <DateRangeProvider>
         <Routes>
           <Route path="/emails/unparsed" element={<UnparsedEmails />} />
         </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 

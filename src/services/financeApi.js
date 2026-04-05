@@ -1,4 +1,4 @@
-import { mockAnalytics, mockStats } from '../mocks/mockData'
+import { mockAnalytics, mockStats, mockTransactions } from '../mocks/mockData'
 import {
   accountsApi,
   adminApi,
@@ -64,8 +64,15 @@ export async function reprocessEmailByMailId(mailId) {
 }
 
 /** GET /api/v1/emails/unparsed — list items omit body/snippet; includes queue `id` (unparsed_message_id). */
-export async function listUnparsedEmails() {
-  const res = await emailsApi.listUnparsedEmailsApiV1EmailsUnparsedGet()
+export async function listUnparsedEmails({ from, to } = {}) {
+  const fromParam = normalizeYmd(from)
+  const toParam = normalizeYmd(to)
+  const res = await emailsApi.listUnparsedEmailsApiV1EmailsUnparsedGet(
+    fromParam,
+    toParam,
+    undefined,
+    undefined,
+  )
   return res.data
 }
 
@@ -134,9 +141,16 @@ export async function getDashboardStats() {
  *   raw: import('../api').AccountFromTransactionsMergedRead,
  * }>>}
  */
-export async function listAccounts() {
+export async function listAccounts({ from, to } = {}) {
   try {
-    const res = await accountsApi.listAccountsApiV1AccountsGet()
+    const fromParam = normalizeYmd(from)
+    const toParam = normalizeYmd(to)
+    const res = await accountsApi.listAccountsApiV1AccountsGet(
+      fromParam,
+      toParam,
+      undefined,
+      undefined,
+    )
     const items = res.data ?? []
     return items.map((a) => {
       const name = String(a.display_name ?? '').trim()
@@ -177,6 +191,12 @@ export async function upsertAccount(payload) {
   }
 }
 
+function normalizeYmd(value) {
+  if (value == null) return undefined
+  const s = String(value).trim()
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined
+}
+
 /**
  * @param {{
  *   query?: string,
@@ -184,6 +204,8 @@ export async function upsertAccount(payload) {
  *   pageSize?: number,
  *   provider?: string,
  *   direction?: 'DEBIT'|'CREDIT',
+ *   from?: string,
+ *   to?: string,
  *   sortBy?: 'transacted_at'|'amount'|'merchant'|'provider'|'account_id'|'transaction_type'|'counterparty',
  *   sortOrder?: 'asc'|'desc',
  * }} [opts]
@@ -196,6 +218,8 @@ export async function listTransactions({
   sortOrder = 'desc',
   provider,
   direction,
+  from,
+  to,
 } = {}) {
   const currentPage = Math.max(1, page ?? 1)
   const currentPageSize = Math.max(1, pageSize ?? 10)
@@ -206,7 +230,10 @@ export async function listTransactions({
       : undefined
   const directionParam =
     direction === 'DEBIT' || direction === 'CREDIT' ? direction : undefined
+  const fromParam = normalizeYmd(from)
+  const toParam = normalizeYmd(to)
 
+  // Arg order must match generated TransactionsApi (from/to/dateFrom/dateTo before search/sort).
   const txResult = await transactionsApi.listTransactionsApiV1TransactionsGet(
     currentPage,
     currentPageSize,
@@ -214,6 +241,8 @@ export async function listTransactions({
     providerParam,
     undefined,
     directionParam,
+    fromParam,
+    toParam,
     undefined,
     undefined,
     search,
@@ -238,7 +267,7 @@ export async function listTransactions({
  */
 export async function findTransactionRowById(
   transactionId,
-  { pageSize = 25, maxPages = 20, query, provider, direction } = {},
+  { pageSize = 25, maxPages = 20, query, provider, direction, from, to } = {},
 ) {
   const id = String(transactionId ?? '').trim()
   if (!id) throw new Error('Missing transaction id')
@@ -250,6 +279,8 @@ export async function findTransactionRowById(
       query,
       provider,
       direction,
+      from,
+      to,
     })
     const match = (res.items ?? []).find((t) => String(t.id) === id)
     if (match) return match
@@ -266,8 +297,53 @@ export async function listTransactionDistinctCatalog() {
   return res.data
 }
 
-export async function getAnalytics() {
+function calendarMonthOverlapsYmdRange(monthYm, fromYmd, toYmd) {
+  const parts = String(monthYm ?? '').trim().split('-')
+  if (parts.length < 2) return false
+  const y = Number(parts[0])
+  const m = Number(parts[1])
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return false
+  const pad = (n) => String(n).padStart(2, '0')
+  const start = `${y}-${pad(m)}-01`
+  const lastDay = new Date(y, m, 0).getDate()
+  const end = `${y}-${pad(m)}-${pad(lastDay)}`
+  return start <= toYmd && end >= fromYmd
+}
+
+/**
+ * Analytics tables (currently mock); when `from`/`to` are set, narrows mock data to that range.
+ * @param {{ from?: string, to?: string }} [opts]
+ */
+export async function getAnalytics({ from, to } = {}) {
   await sleep(150)
-  return mockAnalytics
+  const fromP = normalizeYmd(from)
+  const toP = normalizeYmd(to)
+  if (!fromP || !toP) return mockAnalytics
+
+  const cashflow = mockAnalytics.cashflow.filter((row) =>
+    calendarMonthOverlapsYmdRange(row.month, fromP, toP),
+  )
+
+  const categoryBreakdownMap = Object.create(null)
+  const topMerchantsMap = Object.create(null)
+  for (const tx of mockTransactions) {
+    if (tx.date < fromP || tx.date > toP) continue
+    if (tx.amount < 0) {
+      const spend = -tx.amount
+      const cat = tx.category || '—'
+      const mer = tx.merchant || '—'
+      categoryBreakdownMap[cat] = (categoryBreakdownMap[cat] || 0) + spend
+      topMerchantsMap[mer] = (topMerchantsMap[mer] || 0) + spend
+    }
+  }
+  const categoryBreakdown = Object.entries(categoryBreakdownMap)
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total)
+  const topMerchants = Object.entries(topMerchantsMap)
+    .map(([merchant, total]) => ({ merchant, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 20)
+
+  return { cashflow, categoryBreakdown, topMerchants }
 }
 

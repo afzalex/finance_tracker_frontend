@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import Transactions from '../../pages/Transactions'
+import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import { renderWithTheme } from '../renderWithTheme'
 import * as financeApi from '../../services/financeApi'
 
@@ -43,10 +44,12 @@ describe('Transactions', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/transactions']}>
-        <Routes>
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/transactions/:transactionId" element={<Transactions />} />
-        </Routes>
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -86,6 +89,8 @@ describe('Transactions', () => {
           query: 'Starbucks',
           page: 1,
           pageSize: 25,
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           sortBy: 'transacted_at',
           sortOrder: 'desc',
         }),
@@ -112,6 +117,8 @@ describe('Transactions', () => {
         expect(financeApi.listTransactions).toHaveBeenLastCalledWith(
           expect.objectContaining({
             page: 2,
+            from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+            to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
             sortBy: 'transacted_at',
             sortOrder: 'desc',
           }),
@@ -128,10 +135,12 @@ describe('Transactions', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/transactions']}>
-        <Routes>
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/transactions/:transactionId" element={<Transactions />} />
-        </Routes>
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -160,10 +169,12 @@ describe('Transactions', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/transactions?q=Starbucks']}>
-        <Routes>
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/transactions/:transactionId" element={<Transactions />} />
-        </Routes>
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -173,6 +184,8 @@ describe('Transactions', () => {
           query: 'Starbucks',
           page: 1,
           pageSize: 25,
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         }),
       )
     })
@@ -187,10 +200,12 @@ describe('Transactions', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/transactions']}>
-        <Routes>
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/transactions/:transactionId" element={<Transactions />} />
-        </Routes>
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -220,10 +235,12 @@ describe('Transactions', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/transactions']}>
-        <Routes>
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/transactions/:transactionId" element={<Transactions />} />
-        </Routes>
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
 
@@ -247,10 +264,12 @@ describe('Transactions', () => {
 
     renderWithTheme(
       <MemoryRouter initialEntries={['/transactions']}>
-        <Routes>
-          <Route path="/transactions" element={<Transactions />} />
-          <Route path="/transactions/:transactionId" element={<Transactions />} />
-        </Routes>
+        <DateRangeProvider>
+          <Routes>
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/transactions/:transactionId" element={<Transactions />} />
+          </Routes>
+        </DateRangeProvider>
       </MemoryRouter>,
     )
     await waitFor(() => {
@@ -273,6 +292,8 @@ describe('Transactions', () => {
         expect.objectContaining({
           pageSize: 50,
           page: 1,
+          from: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           sortBy: 'transacted_at',
           sortOrder: 'desc',
         }),

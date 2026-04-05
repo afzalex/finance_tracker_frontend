@@ -10,8 +10,8 @@ export default function RootLayout() {
   return (
     <Box sx={{ minHeight: '100svh', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+        <Toolbar sx={{ gap: 2, flexWrap: 'wrap', alignItems: 'center', py: { xs: 1, sm: 0.5 } }}>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, minWidth: 0 }}>
             Finance Tracker
           </Typography>
         </Toolbar>

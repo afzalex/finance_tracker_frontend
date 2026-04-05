@@ -1,6 +1,7 @@
 import { screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import Analytics from '../../pages/Analytics'
+import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import { renderWithTheme } from '../renderWithTheme'
 import * as financeApi from '../../services/financeApi'
 
@@ -27,7 +28,11 @@ describe('Analytics', () => {
     }
     financeApi.getAnalytics.mockResolvedValue(mockData)
 
-    renderWithTheme(<Analytics />)
+    renderWithTheme(
+      <DateRangeProvider>
+        <Analytics />
+      </DateRangeProvider>,
+    )
 
     await waitFor(() => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
@@ -56,7 +61,11 @@ describe('Analytics', () => {
   it('renders error message when API fails', async () => {
     financeApi.getAnalytics.mockRejectedValueOnce(new Error('Failed analytics'))
 
-    renderWithTheme(<Analytics />)
+    renderWithTheme(
+      <DateRangeProvider>
+        <Analytics />
+      </DateRangeProvider>,
+    )
 
     await waitFor(() => {
       expect(screen.getByText('Failed analytics')).toBeInTheDocument()

@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   Dialog,
+  Divider,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -26,9 +27,11 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import EmailSourcePanel from '../components/EmailSourcePanel'
+import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
 import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
+import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { apiErrorMessage, listUnparsedEmails } from '../services/financeApi'
 import { formatDateTime } from '../utils/format'
@@ -188,6 +191,7 @@ export default function UnparsedEmails() {
     [searchParams],
   )
   const [listRefreshKey, setListRefreshKey] = useState(0)
+  const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
 
   const bindOpenReprocessConfirm = useCallback(
     (fn) => setOpenReprocessConfirm(() => fn),
@@ -226,9 +230,19 @@ export default function UnparsedEmails() {
     setUiDetailKey(routeDetailKey)
   }, [routeDetailKey])
 
+  const unparsedListKey = useMemo(
+    () =>
+      JSON.stringify({
+        refresh: listRefreshKey,
+        from: dateRangeFrom,
+        to: dateRangeTo,
+      }),
+    [listRefreshKey, dateRangeFrom, dateRangeTo],
+  )
+
   const { status, data, error } = useResource(
-    `emails:unparsed:${listRefreshKey}`,
-    () => listUnparsedEmails(),
+    `emails:unparsed:${unparsedListKey}`,
+    () => listUnparsedEmails({ from: dateRangeFrom, to: dateRangeTo }),
   )
 
   const rows = useMemo(() => data ?? [], [data])
@@ -505,66 +519,87 @@ export default function UnparsedEmails() {
   const uiQueueId =
     uiDetailKey && /^\d+$/.test(uiDetailKey) ? Number(uiDetailKey) : null
 
+  const hasActiveFilters = useMemo(
+    () =>
+      subjectQuery.trim() !== '' ||
+      filterWhyNotParsed !== FILTER_ALL ||
+      filterClassification !== FILTER_ALL ||
+      filterParser !== FILTER_ALL,
+    [subjectQuery, filterWhyNotParsed, filterClassification, filterParser],
+  )
+
+  const queueCountLabel = useMemo(() => {
+    if (status === 'loading') return '…'
+    if (status !== 'success') return '—'
+    if (rows.length === 0) return '0 total'
+    if (hasActiveFilters) return `${filteredRows.length} of ${rows.length}`
+    return `${rows.length} total`
+  }, [status, rows.length, filteredRows.length, hasActiveFilters])
+
   return (
     <Stack spacing={2}>
-      <PageHeader title="Unparsed Emails" />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        gap={2}
+      >
+        <PageHeader title="Unparsed Emails" />
+        <Box sx={{ flexShrink: 0 }}>
+          <HeaderDateRangeFilter />
+        </Box>
+      </Stack>
 
       {error && <Alert severity="error">{apiErrorMessage(error)}</Alert>}
 
-      <Card variant="outlined">
-        <CardContent>
-          {status === 'loading' ? (
-            <LoadingBlock />
-          ) : (
-            <Stack spacing={2}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 2,
-                  alignItems: 'center',
-                  width: '100%',
-                }}
-              >
-                <TextField
-                  size="small"
-                  label="Search subject"
-                  placeholder="Type to filter by subject…"
-                  value={subjectQuery}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setSearchParams(
-                      (prev) => {
-                        const sp = new URLSearchParams(prev)
-                        if (!v.trim()) sp.delete(UNPARSED_Q.subject)
-                        else sp.set(UNPARSED_Q.subject, v)
-                        return sp
-                      },
-                      { replace: true },
-                    )
-                  }}
-                  sx={{
-                    flex: '1 1 200px',
-                    minWidth: { xs: '100%', sm: 200 },
-                  }}
-                  slotProps={{ htmlInput: { 'aria-label': 'Search subject' } }}
-                />
-                <FormControl
-                  size="small"
-                  sx={{ flex: '0 0 auto', minWidth: 200, maxWidth: 280 }}
-                >
-                  <InputLabel id="unparsed-filter-whynot-label">
-                    Why Not Parsed
-                  </InputLabel>
-                  <Select
-                    labelId="unparsed-filter-whynot-label"
-                    id="unparsed-filter-whynot"
-                    value={filterWhyNotParsed}
-                    label="Why Not Parsed"
-                    onChange={(e) =>
-                      setListFilter(UNPARSED_Q.whyNotParsed, e.target.value)
-                    }
-                  >
+      <Stack
+        direction="row"
+        flexWrap="wrap"
+        gap={2}
+        alignItems="center"
+        sx={{ width: '100%' }}
+      >
+        <TextField
+          size="small"
+          label="Search subject"
+          placeholder="Type to filter by subject…"
+          value={subjectQuery}
+          onChange={(e) => {
+            const v = e.target.value
+            setSearchParams(
+              (prev) => {
+                const sp = new URLSearchParams(prev)
+                if (!v.trim()) sp.delete(UNPARSED_Q.subject)
+                else sp.set(UNPARSED_Q.subject, v)
+                return sp
+              },
+              { replace: true },
+            )
+          }}
+          sx={{
+            minWidth: 220,
+            flex: '1 1 200px',
+          }}
+          slotProps={{ htmlInput: { 'aria-label': 'Search subject' } }}
+        />
+        <FormControl
+          size="small"
+          sx={{ minWidth: 200, maxWidth: 280 }}
+          disabled={status !== 'success'}
+        >
+          <InputLabel id="unparsed-filter-whynot-label">
+            Why Not Parsed
+          </InputLabel>
+          <Select
+            labelId="unparsed-filter-whynot-label"
+            id="unparsed-filter-whynot"
+            value={filterWhyNotParsed}
+            label="Why Not Parsed"
+            onChange={(e) =>
+              setListFilter(UNPARSED_Q.whyNotParsed, e.target.value)
+            }
+          >
                     <MenuItem value={FILTER_ALL}>
                       <em>All</em>
                     </MenuItem>
@@ -586,23 +621,24 @@ export default function UnparsedEmails() {
                       </MenuItem>
                     ))}
                   </Select>
-                </FormControl>
-                <FormControl
-                  size="small"
-                  sx={{ flex: '0 0 auto', minWidth: 200, maxWidth: 280 }}
-                >
-                  <InputLabel id="unparsed-filter-classification-label">
-                    Classification
-                  </InputLabel>
-                  <Select
-                    labelId="unparsed-filter-classification-label"
-                    id="unparsed-filter-classification"
-                    value={filterClassification}
-                    label="Classification"
-                    onChange={(e) =>
-                      setListFilter(UNPARSED_Q.classification, e.target.value)
-                    }
-                  >
+        </FormControl>
+        <FormControl
+          size="small"
+          sx={{ minWidth: 200, maxWidth: 280 }}
+          disabled={status !== 'success'}
+        >
+          <InputLabel id="unparsed-filter-classification-label">
+            Classification
+          </InputLabel>
+          <Select
+            labelId="unparsed-filter-classification-label"
+            id="unparsed-filter-classification"
+            value={filterClassification}
+            label="Classification"
+            onChange={(e) =>
+              setListFilter(UNPARSED_Q.classification, e.target.value)
+            }
+          >
                     <MenuItem value={FILTER_ALL}>
                       <em>All</em>
                     </MenuItem>
@@ -617,22 +653,23 @@ export default function UnparsedEmails() {
                       </MenuItem>
                     ))}
                   </Select>
-                </FormControl>
-                <FormControl
-                  size="small"
-                  sx={{ flex: '0 0 auto', minWidth: 200, maxWidth: 280 }}
-                  data-testid="unparsed-filter-parser"
-                >
-                  <InputLabel id="unparsed-filter-parser-label">Parser</InputLabel>
-                  <Select
-                    labelId="unparsed-filter-parser-label"
-                    id="unparsed-filter-parser"
-                    value={filterParser}
-                    label="Parser"
-                    onChange={(e) =>
-                      setListFilter(UNPARSED_Q.parser, e.target.value)
-                    }
-                  >
+        </FormControl>
+        <FormControl
+          size="small"
+          sx={{ minWidth: 200, maxWidth: 280 }}
+          disabled={status !== 'success'}
+          data-testid="unparsed-filter-parser"
+        >
+          <InputLabel id="unparsed-filter-parser-label">Parser</InputLabel>
+          <Select
+            labelId="unparsed-filter-parser-label"
+            id="unparsed-filter-parser"
+            value={filterParser}
+            label="Parser"
+            onChange={(e) =>
+              setListFilter(UNPARSED_Q.parser, e.target.value)
+            }
+          >
                     <MenuItem value={FILTER_ALL}>
                       <em>All</em>
                     </MenuItem>
@@ -651,15 +688,34 @@ export default function UnparsedEmails() {
                         {v}
                       </MenuItem>
                     ))}
-                  </Select>
-                </FormControl>
-              </Box>
-              <Box sx={{ width: '100%', overflowX: 'auto' }}>
-                <Table
-                  size="small"
-                  aria-label="unparsed emails table"
-                  sx={{ tableLayout: 'fixed', width: '100%' }}
-                >
+          </Select>
+        </FormControl>
+      </Stack>
+
+      <Card variant="outlined">
+        <CardContent>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="baseline"
+            sx={{ mb: 1 }}
+          >
+            <Typography variant="h6">Queued messages</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {queueCountLabel}
+            </Typography>
+          </Stack>
+          <Divider sx={{ mb: 1 }} />
+
+          {status === 'loading' ? (
+            <LoadingBlock />
+          ) : (
+            <Box sx={{ width: '100%', overflowX: 'auto' }}>
+              <Table
+                size="small"
+                aria-label="unparsed emails table"
+                sx={{ tableLayout: 'fixed', width: '100%' }}
+              >
                   <colgroup>
                     <col style={{ width: '13%' }} />
                     <col style={{ width: '26%' }} />
@@ -830,8 +886,7 @@ export default function UnparsedEmails() {
                     )}
                   </TableBody>
                 </Table>
-              </Box>
-            </Stack>
+            </Box>
           )}
         </CardContent>
       </Card>

@@ -126,6 +126,8 @@ describe('listTransactions', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      undefined,
       'coffee',
       'transacted_at',
       'desc',
@@ -138,6 +140,28 @@ describe('listTransactions', () => {
     expect(out.items[0].merchant).toBe('Coffee')
     expect(out.items[0].amount).toBe(-25.5)
     expect(out.items[0].raw).toEqual(baseTx)
+  })
+
+  it('passes valid YYYY-MM-DD from/to and drops invalid `to`', async () => {
+    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 10 },
+    })
+    await listTransactions({ from: '2024-01-15', to: 'bad', page: 1, pageSize: 10 })
+    expect(transactionsApi.listTransactionsApiV1TransactionsGet).toHaveBeenCalledWith(
+      1,
+      10,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '2024-01-15',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'transacted_at',
+      'desc',
+    )
   })
 
   it('uses positive amount for CREDIT direction', async () => {

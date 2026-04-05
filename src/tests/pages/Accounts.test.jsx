@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import Accounts from '../../pages/Accounts'
+import { DateRangeProvider } from '../../contexts/DateRangeContext'
 import { renderWithTheme } from '../renderWithTheme'
 import * as financeApi from '../../services/financeApi'
 
@@ -14,10 +15,12 @@ vi.mock('../../services/financeApi', () => ({
 function renderAccountsAt(path = '/accounts') {
   return renderWithTheme(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="accounts" element={<Accounts />} />
-        <Route path="accounts/:accountId" element={<Accounts />} />
-      </Routes>
+      <DateRangeProvider>
+        <Routes>
+          <Route path="accounts" element={<Accounts />} />
+          <Route path="accounts/:accountId" element={<Accounts />} />
+        </Routes>
+      </DateRangeProvider>
     </MemoryRouter>,
   )
 }

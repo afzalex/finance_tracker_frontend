@@ -12,22 +12,43 @@ import {
   TableRow,
   Typography,
 } from '@mui/material'
+import { useMemo } from 'react'
+import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
+import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { getAnalytics } from '../services/financeApi'
 import { signedAmountSx } from '../utils/moneySx'
 import { formatMoney } from '../utils/format'
 
 export default function Analytics() {
-  const { status, data, error } = useResource('analytics', getAnalytics)
+  const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
+  const analyticsKey = useMemo(
+    () => JSON.stringify({ from: dateRangeFrom, to: dateRangeTo }),
+    [dateRangeFrom, dateRangeTo],
+  )
+  const { status, data, error } = useResource(
+    `analytics:${analyticsKey}`,
+    () => getAnalytics({ from: dateRangeFrom, to: dateRangeTo }),
+  )
 
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Analytics"
-        description="Placeholder analytics tables (mock data)."
-      />
+      <Stack
+        direction="row"
+        alignItems="flex-start"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        gap={2}
+      >
+        <PageHeader
+          title="Analytics"
+        />
+        <Box sx={{ flexShrink: 0, alignSelf: 'center' }}>
+          <HeaderDateRangeFilter />
+        </Box>
+      </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
 

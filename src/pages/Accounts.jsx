@@ -17,9 +17,11 @@ import {
 } from '@mui/material'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AccountDetailDialog from '../components/AccountDetailDialog'
+import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
 import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
+import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { listAccounts } from '../services/financeApi'
 import { balanceAmountSx } from '../utils/moneySx'
@@ -130,9 +132,19 @@ export default function Accounts() {
   }, [routeAccountId])
 
   const [listRefresh, setListRefresh] = useState(0)
+  const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
+  const accountsResourceKey = useMemo(
+    () =>
+      JSON.stringify({
+        refresh: listRefresh,
+        from: dateRangeFrom,
+        to: dateRangeTo,
+      }),
+    [listRefresh, dateRangeFrom, dateRangeTo],
+  )
   const { status, data, error } = useResource(
-    `accounts:${listRefresh}`,
-    listAccounts,
+    `accounts:${accountsResourceKey}`,
+    () => listAccounts({ from: dateRangeFrom, to: dateRangeTo }),
   )
   const accounts = data ?? EMPTY_ACCOUNTS
 
@@ -238,9 +250,18 @@ export default function Accounts() {
 
   return (
     <Stack spacing={2}>
-      <PageHeader
-        title="Accounts"
-      />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        gap={2}
+      >
+        <PageHeader title="Accounts" />
+        <Box sx={{ flexShrink: 0 }}>
+          <HeaderDateRangeFilter />
+        </Box>
+      </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
 

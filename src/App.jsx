@@ -3,6 +3,7 @@ import RootLayout from './components/RootLayout'
 import StartupGate from './components/StartupGate'
 import AppShell from './components/AppShell'
 import { AppMetaProvider } from './contexts/AppMetaContext'
+import { DateRangeProvider } from './contexts/DateRangeContext'
 import Dashboard from './pages/Dashboard'
 import Transactions from './pages/Transactions'
 import Accounts from './pages/Accounts'
@@ -30,8 +31,9 @@ function SettingsRulesRedirect() {
 function App() {
   return (
     <AppMetaProvider>
-      <Routes>
-        <Route element={<RootLayout />}>
+      <DateRangeProvider>
+        <Routes>
+          <Route element={<RootLayout />}>
           <Route path="oauth/gmail/callback" element={<GmailOauthCallback />} />
 
           <Route element={<StartupGate />}>
@@ -64,7 +66,8 @@ function App() {
 
           <Route path="*" element={<NotFound />} />
         </Route>
-      </Routes>
+        </Routes>
+      </DateRangeProvider>
     </AppMetaProvider>
   )
 }

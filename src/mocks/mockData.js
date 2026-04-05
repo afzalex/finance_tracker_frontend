@@ -183,14 +183,6 @@ export const mockStats = {
   incomeThisMonth: 7000.0,
   expenseThisMonth: -6149.75,
   topCategory: 'Groceries',
-  recentActivity: mockTransactions
-    .slice(0, 6)
-    .map(({ id, date, description, merchant, amount }) => ({
-      id,
-      date,
-      label: `${merchant} • ${description}`,
-      amount,
-    })),
 }
 
 export const mockAnalytics = {

@@ -6,11 +6,20 @@ import * as financeApi from '../../services/financeApi'
 
 vi.mock('../../services/financeApi', () => ({
   getDashboardStats: vi.fn(),
+  listTransactions: vi.fn(),
 }))
+
+const emptyTxList = {
+  items: [],
+  total: 0,
+  page: 1,
+  pageSize: 8,
+}
 
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    financeApi.listTransactions.mockResolvedValue(emptyTxList)
   })
 
   it('renders loading slate and then dashboard stats', async () => {
@@ -19,11 +28,23 @@ describe('Dashboard', () => {
       incomeThisMonth: 3000,
       expenseThisMonth: 2000,
       topCategory: 'Groceries',
-      recentActivity: [
-        { id: '1', label: 'Whole Foods', date: '2023-10-01T12:00:00Z', amount: -150 }
-      ]
     }
     financeApi.getDashboardStats.mockResolvedValueOnce(mockStats)
+    financeApi.listTransactions.mockResolvedValueOnce({
+      items: [
+        {
+          id: '1',
+          date: '2023-10-01T12:00:00Z',
+          description: 'Purchase',
+          merchant: 'Whole Foods',
+          amount: -150,
+          currency: 'USD',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 8,
+    })
 
     renderWithTheme(<Dashboard />)
 
@@ -46,10 +67,18 @@ describe('Dashboard', () => {
     expect(screen.getByText('Top Category')).toBeInTheDocument()
     expect(screen.getByText('Groceries')).toBeInTheDocument()
 
-    // Recent Activity
-    expect(screen.getByText('Recent activity')).toBeInTheDocument()
-    expect(screen.getByText('Whole Foods')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Recent Activity')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Whole Foods/)).toBeInTheDocument()
     expect(screen.getByText('-$150.00')).toBeInTheDocument()
+
+    expect(financeApi.listTransactions).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 8,
+      sortBy: 'transacted_at',
+      sortOrder: 'desc',
+    })
   })
 
   it('renders error message when API fails', async () => {

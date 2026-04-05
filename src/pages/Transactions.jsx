@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
 import LoadingBlock from '../components/LoadingBlock'
 import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
 import PageHeader from '../components/PageHeader'
@@ -33,6 +34,7 @@ import {
   listTransactions,
 } from '../services/financeApi'
 import useResource from '../hooks/useResource'
+import useDateRange from '../contexts/useDateRange'
 import { signedAmountSx } from '../utils/moneySx'
 import { formatDateTime } from '../utils/format'
 
@@ -108,6 +110,7 @@ export default function Transactions() {
   const navigate = useNavigate()
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
 
   const routeTransactionId = params.transactionId ? String(params.transactionId) : null
   const tabParam = String(searchParams.get('tab') ?? '').toLowerCase()
@@ -151,6 +154,28 @@ export default function Transactions() {
     )
   }, [setSearchParams])
 
+  const dateRangeKeyRef = useRef(null)
+  useEffect(() => {
+    const key = `${dateRangeFrom}|${dateRangeTo}`
+    if (dateRangeKeyRef.current === null) {
+      dateRangeKeyRef.current = key
+      return
+    }
+    if (dateRangeKeyRef.current === key) return
+    dateRangeKeyRef.current = key
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev)
+        if (sp.get('page') !== '0') {
+          sp.set('page', '0')
+          return sp
+        }
+        return prev
+      },
+      { replace: true },
+    )
+  }, [dateRangeFrom, dateRangeTo, setSearchParams])
+
   const distinctKey = 'transactions:distinct-catalog'
   const {
     status: distinctStatus,
@@ -169,8 +194,10 @@ export default function Transactions() {
         sort: searchParams.get(TX_Q.sort) ?? '',
         page,
         rowsPerPage,
+        from: dateRangeFrom,
+        to: dateRangeTo,
       }),
-    [searchParams, page, rowsPerPage],
+    [searchParams, page, rowsPerPage, dateRangeFrom, dateRangeTo],
   )
   const resourceKey = `transactions:${listSearchKey}`
   const { status, data, error } = useResource(resourceKey, () =>
@@ -180,6 +207,8 @@ export default function Transactions() {
       pageSize: rowsPerPage,
       provider: providerFilter,
       direction: directionFilter || undefined,
+      from: dateRangeFrom,
+      to: dateRangeTo,
       sortBy: TX_SORT_API[sortBy],
       sortOrder: sortDir,
     }),
@@ -249,6 +278,8 @@ export default function Transactions() {
       query,
       provider: providerFilter,
       direction: directionFilter || undefined,
+      from: dateRangeFrom,
+      to: dateRangeTo,
     })
       .then((found) => {
         if (cancelled) return
@@ -277,6 +308,8 @@ export default function Transactions() {
     query,
     providerFilter,
     directionFilter,
+    dateRangeFrom,
+    dateRangeTo,
   ])
 
   const handleQueryChange = (e) => {
@@ -320,7 +353,18 @@ export default function Transactions() {
 
   return (
     <Stack spacing={2}>
-      <PageHeader title="Transactions" />
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        flexWrap="wrap"
+        gap={2}
+      >
+        <PageHeader title="Transactions" />
+        <Box sx={{ flexShrink: 0 }}>
+          <HeaderDateRangeFilter />
+        </Box>
+      </Stack>
 
       <Stack
         direction="row"
