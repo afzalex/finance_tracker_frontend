@@ -21,6 +21,7 @@ describe('Transactions', () => {
       providers: ['Plaid'],
       merchants: [],
       counterparties: [],
+      has_self_transfer_transactions: false,
     })
   })
 

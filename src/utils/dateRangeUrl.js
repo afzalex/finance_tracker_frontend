@@ -4,8 +4,9 @@ export const DATE_RANGE_Q = {
   to: 'to',
 }
 
-/** Sidebar targets that share the global date range across the app. */
+/** Sidebar targets that keep `from`/`to` in the URL (including pages that do not read the range). */
 export const SHARED_DATE_RANGE_NAV_PATHS = new Set([
+  '/',
   '/transactions',
   '/emails/unparsed',
   '/accounts',

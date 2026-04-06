@@ -321,7 +321,7 @@ export default function Accounts() {
                       direction={sortBy === ACC_SORT_COL.count ? sortDir : 'asc'}
                       onSort={() => toggleAccSort(ACC_SORT_COL.count)}
                     >
-                      Count
+                      Transactions
                     </SortableTableHeaderCell>
                     <SortableTableHeaderCell
                       align="right"

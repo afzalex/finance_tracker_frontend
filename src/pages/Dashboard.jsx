@@ -24,7 +24,7 @@ import {
 } from '../services/financeApi'
 import useResource from '../hooks/useResource'
 import { signedAmountSx } from '../utils/moneySx'
-import { formatDate } from '../utils/format'
+import { formatDate, formatDateTime } from '../utils/format'
 import {
   layoutSectionDividerBottomSx,
   layoutSectionMarginBottomSx,
@@ -34,7 +34,7 @@ import {
 import { DATE_RANGE_Q, pathWithDateRangeQuery } from '../utils/dateRangeUrl'
 
 const RECENT_TX_PAGE_SIZE = 8
-const RECENT_MAIL_LIMIT = 5
+const RECENT_MAIL_LIMIT = 6
 
 /** Inclusive YYYY-MM-DD range for the calendar month containing `d` (local). */
 function calendarMonthRangeYmd(d = new Date()) {
@@ -102,10 +102,10 @@ function recentMailSubjectDisplay(e) {
   return mid || '—'
 }
 
-function recentMailActivityDateLabel(e) {
+function recentMailActivityDateTime(e) {
   const raw = e.last_transacted_at
-  if (raw == null || String(raw).trim() === '') return '—'
-  return formatDate(raw)
+  if (raw == null || String(raw).trim() === '') return null
+  return formatDateTime(raw)
 }
 
 /** Sender, classification, cached date — not transaction counts (section context). */
@@ -118,9 +118,6 @@ function recentMailSecondaryAttributes(e) {
   const cls = e.enrichment?.classification_name
   if (cls != null && String(cls).trim() !== '') {
     parts.push(String(cls).trim())
-  }
-  if (e.created_at != null && String(e.created_at).trim() !== '') {
-    parts.push(`Cached ${formatDate(e.created_at)}`)
   }
   return parts.length ? parts.join(' · ') : null
 }
@@ -441,9 +438,6 @@ export default function Dashboard() {
             <Typography variant="h6" sx={{ mb: 0.25 }}>
               Recent Mails
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-              Cached messages with linked transactions (newest activity first).
-            </Typography>
             <Divider sx={layoutSectionDividerBottomSx} />
             {recentMailError && (
               <Alert severity="error" sx={layoutSectionMarginBottomSx}>
@@ -464,7 +458,7 @@ export default function Dashboard() {
                   const snippet = recentMailSnippetLine(item)
                   const hasSubject = recentMailHasSubject(item)
                   const subjectTitle = recentMailSubjectDisplay(item)
-                  const activityDate = recentMailActivityDateLabel(item)
+                  const activityWhen = recentMailActivityDateTime(item)
                   const secondary = recentMailSecondaryAttributes(item)
                   const mailTxSp = new URLSearchParams()
                   mailTxSp.set('mail_id', String(item.mail_id))
@@ -479,7 +473,11 @@ export default function Dashboard() {
                       to={`/transactions?${mailTxSp.toString()}`}
                       underline="none"
                       color="inherit"
-                      aria-label={`Open source email: ${subjectTitle}, last activity ${activityDate}`}
+                      aria-label={
+                        activityWhen
+                          ? `Open source email: ${subjectTitle}, ${activityWhen}`
+                          : `Open source email: ${subjectTitle}`
+                      }
                       sx={{
                         display: 'block',
                         py: 0.875,
@@ -488,30 +486,48 @@ export default function Dashboard() {
                         '&:hover': { bgcolor: 'action.hover' },
                       }}
                     >
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        component="div"
+                      <Box
                         sx={{
-                          lineHeight: 1.45,
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        Last activity · {activityDate}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        fontWeight={600}
-                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: 1.5,
                           minWidth: 0,
-                          lineHeight: 1.35,
-                          wordBreak: 'break-word',
-                          mt: 0.25,
-                          ...(!hasSubject ? recentMailBodyClampSx : {}),
                         }}
                       >
-                        {subjectTitle}
-                      </Typography>
+                        <Typography
+                          variant="body2"
+                          component="div"
+                          fontWeight={600}
+                          sx={{
+                            minWidth: 0,
+                            flex: '1 1 auto',
+                            lineHeight: 1.35,
+                            wordBreak: 'break-word',
+                            ...(!hasSubject ? recentMailBodyClampSx : {}),
+                          }}
+                        >
+                          {subjectTitle}
+                        </Typography>
+                        {activityWhen ? (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            component="span"
+                            sx={{
+                              flexShrink: 0,
+                              lineHeight: 1.35,
+                              whiteSpace: 'nowrap',
+                              maxWidth: '42%',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              textAlign: 'right',
+                            }}
+                          >
+                            {activityWhen}
+                          </Typography>
+                        ) : null}
+                      </Box>
                       {secondary ? (
                         <Typography
                           variant="caption"
@@ -539,7 +555,7 @@ export default function Dashboard() {
                             ...recentMailBodyClampSx,
                           }}
                         >
-                          {snippet}
+                          {snippet} ...
                         </Typography>
                       ) : null}
                     </Link>

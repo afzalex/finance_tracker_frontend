@@ -20,6 +20,21 @@ export function formatDateTime(isoDate) {
   })
 }
 
+/**
+ * Month–year label for charts/ranges: short month + hyphen + 4-digit year (e.g. `Jan-2026`, locale-dependent month token).
+ * @param {Date|string|number} isoDateOrDate
+ */
+export function formatMonthYearShortHyphen(isoDateOrDate) {
+  const d =
+    isoDateOrDate instanceof Date
+      ? isoDateOrDate
+      : new Date(isoDateOrDate)
+  if (Number.isNaN(d.getTime())) return String(isoDateOrDate ?? '')
+  const month = d.toLocaleDateString(undefined, { month: 'short' })
+  const year = d.getFullYear()
+  return `${month}-${year}`
+}
+
 export function formatMoney(amount, currency = 'INR') {
   return new Intl.NumberFormat(undefined, {
     style: 'currency',

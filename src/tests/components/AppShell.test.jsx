@@ -57,6 +57,34 @@ describe('AppShell', () => {
     expect(screen.queryByLabelText('Open navigation')).not.toBeInTheDocument()
   })
 
+  it('preserves from/to on Dashboard link', async () => {
+    vi.mocked(useMediaQuery).mockReturnValue(false)
+
+    renderWithTheme(
+      <MobileNavProvider>
+        <MemoryRouter
+          initialEntries={['/transactions?from=2024-06-01&to=2024-06-30']}
+        >
+          <DateRangeProvider>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path="transactions" element={<div>Tx</div>} />
+              </Route>
+            </Routes>
+          </DateRangeProvider>
+        </MemoryRouter>
+      </MobileNavProvider>,
+    )
+
+    await waitFor(() => {
+      const dash = screen.getByText('Dashboard').closest('a')
+      expect(dash).toHaveAttribute(
+        'href',
+        '/?from=2024-06-01&to=2024-06-30',
+      )
+    })
+  })
+
   it('preserves from/to on date-scoped nav links from the current route', async () => {
     vi.mocked(useMediaQuery).mockReturnValue(false)
 

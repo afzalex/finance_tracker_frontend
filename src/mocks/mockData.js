@@ -186,10 +186,11 @@ export const mockStats = {
 }
 
 export const mockAnalytics = {
+  cashflowRange: null,
   cashflow: [
-    { month: '2026-01', income: 6800.0, expense: 5200.5 },
-    { month: '2026-02', income: 7000.0, expense: 5401.25 },
-    { month: '2026-03', income: 7000.0, expense: 6149.75 },
+    { month: '2026-01', credit: 6800.0, debit: 5200.5, total: 1599.5, count: 24 },
+    { month: '2026-02', credit: 7000.0, debit: 5401.25, total: 1598.75, count: 31 },
+    { month: '2026-03', credit: 7000.0, debit: 6149.75, total: 850.25, count: 28 },
   ],
   categoryBreakdown: [
     { category: 'Groceries', total: 612.34 },

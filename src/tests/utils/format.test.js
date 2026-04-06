@@ -5,6 +5,7 @@ import {
   formatInrAmount,
   formatInrAmountParts,
   formatMoney,
+  formatMonthYearShortHyphen,
 } from '../../utils/format'
 
 describe('formatDate', () => {
@@ -30,6 +31,19 @@ describe('formatDateTime', () => {
 
   it('returns original value when date is invalid', () => {
     expect(formatDateTime('not-a-date')).toBe('not-a-date')
+  })
+})
+
+describe('formatMonthYearShortHyphen', () => {
+  it('uses short month, hyphen, and 4-digit year (local date)', () => {
+    expect(formatMonthYearShortHyphen(new Date(2026, 3, 6))).toMatch(/-2026$/)
+    expect(formatMonthYearShortHyphen(new Date(2026, 3, 6))).not.toMatch(
+      /\d{1,2}\s*,\s*\d{4}/,
+    )
+  })
+
+  it('returns original string when value is not a valid date', () => {
+    expect(formatMonthYearShortHyphen('not-a-date')).toBe('not-a-date')
   })
 })
 

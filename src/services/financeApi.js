@@ -256,12 +256,29 @@ function normalizeYmd(value) {
 }
 
 /**
+ * @param {Date} [now]
+ * @returns {{ from: string, to: string }} YYYY-MM-DD — `from` = 1st of month 12 months before `now`’s month; `to` = local calendar date of `now`.
+ */
+export function getCashflowQueryRangeToday(now = new Date()) {
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1
+  const d = now.getDate()
+  const toOut = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const start = new Date(y, m - 1 - 12, 1)
+  const sy = start.getFullYear()
+  const sm = start.getMonth() + 1
+  const fromOut = `${sy}-${String(sm).padStart(2, '0')}-01`
+  return { from: fromOut, to: toOut }
+}
+
+/**
  * @param {{
  *   query?: string,
  *   page?: number,
  *   pageSize?: number,
  *   provider?: string,
  *   direction?: 'DEBIT'|'CREDIT',
+ *   counterparty?: string,
  *   from?: string,
  *   to?: string,
  *   sortBy?: 'transacted_at'|'amount'|'merchant'|'provider'|'account_id'|'transaction_type'|'counterparty',
@@ -276,6 +293,7 @@ export async function listTransactions({
   sortOrder = 'desc',
   provider,
   direction,
+  counterparty,
   from,
   to,
 } = {}) {
@@ -290,8 +308,12 @@ export async function listTransactions({
     direction === 'DEBIT' || direction === 'CREDIT' ? direction : undefined
   const fromParam = normalizeYmd(from)
   const toParam = normalizeYmd(to)
+  const counterpartyParam =
+    counterparty != null && String(counterparty).trim() !== ''
+      ? String(counterparty).trim()
+      : undefined
 
-  // Arg order must match generated TransactionsApi (from/to/dateFrom/dateTo before search/sort).
+  // Arg order must match generated TransactionsApi: … dateTo, counterparty, search, sortBy, sortOrder.
   const txResult = await transactionsApi.listTransactionsApiV1TransactionsGet(
     currentPage,
     currentPageSize,
@@ -303,9 +325,11 @@ export async function listTransactions({
     toParam,
     undefined,
     undefined,
+    counterpartyParam,
     search,
     sortBy,
     sortOrder,
+    undefined,
   )
 
   const body = txResult.data
@@ -320,12 +344,44 @@ export async function listTransactions({
 }
 
 /**
+ * PATCH /api/v1/transactions/{id} — only `is_self_transfer` is editable today.
+ * @param {string|number} transactionId
+ * @param {{ isSelfTransfer: boolean }} body
+ * @returns {Promise<ReturnType<typeof mapTransactionRow>>}
+ */
+export async function patchTransaction(transactionId, { isSelfTransfer }) {
+  const id = Number(transactionId)
+  if (!Number.isFinite(id) || id < 1) {
+    throw new Error('Invalid transaction id')
+  }
+  try {
+    const res =
+      await transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch(
+        id,
+        { is_self_transfer: !!isSelfTransfer },
+      )
+    return mapTransactionRow(res.data)
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
+}
+
+/**
  * Attempts to locate a transaction row by its numeric id by scanning pages.
  * This is used for deep-links like `/transactions/:id` when backend search does not support id lookup.
  */
 export async function findTransactionRowById(
   transactionId,
-  { pageSize = 25, maxPages = 20, query, provider, direction, from, to } = {},
+  {
+    pageSize = 25,
+    maxPages = 20,
+    query,
+    provider,
+    direction,
+    counterparty,
+    from,
+    to,
+  } = {},
 ) {
   const id = String(transactionId ?? '').trim()
   if (!id) throw new Error('Missing transaction id')
@@ -337,6 +393,7 @@ export async function findTransactionRowById(
       query,
       provider,
       direction,
+      counterparty,
       from,
       to,
     })
@@ -375,39 +432,59 @@ export async function findFirstTransactionRowByMailId(
   return null
 }
 
-/** GET /api/v1/transactions/distinct — provider / merchant / counterparty pickers. */
-export async function listTransactionDistinctCatalog() {
+/** GET /api/v1/transactions/distinct — provider / merchant / counterparty pickers (scoped to range). */
+export async function listTransactionDistinctCatalog({ from, to } = {}) {
   const res =
-    await transactionsApi.distinctTransactionCatalogApiV1TransactionsDistinctGet()
+    await transactionsApi.distinctTransactionCatalogApiV1TransactionsDistinctGet(
+      true,
+      from ?? undefined,
+      to ?? undefined,
+      undefined,
+      undefined,
+    )
   return res.data
 }
 
-function calendarMonthOverlapsYmdRange(monthYm, fromYmd, toYmd) {
-  const parts = String(monthYm ?? '').trim().split('-')
-  if (parts.length < 2) return false
-  const y = Number(parts[0])
-  const m = Number(parts[1])
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return false
-  const pad = (n) => String(n).padStart(2, '0')
-  const start = `${y}-${pad(m)}-01`
-  const lastDay = new Date(y, m, 0).getDate()
-  const end = `${y}-${pad(m)}-${pad(lastDay)}`
-  return start <= toYmd && end >= fromYmd
-}
-
 /**
- * Analytics tables (currently mock); when `from`/`to` are set, narrows mock data to that range.
+ * Cashflow from `GET /api/v1/analytics/cashflow` when `from`/`to` are set.
+ * Uses the same `from`/`to` as the analytics period (e.g. Analytics PERIOD dropdown). Returned
+ * cashflow rows are sorted by `month` descending. `cashflowRange` echoes those bounds. Category
+ * breakdown still uses the exact `from`/`to` and mock txs.
  * @param {{ from?: string, to?: string }} [opts]
  */
 export async function getAnalytics({ from, to } = {}) {
-  await sleep(150)
   const fromP = normalizeYmd(from)
   const toP = normalizeYmd(to)
-  if (!fromP || !toP) return mockAnalytics
+  if (!fromP || !toP) {
+    await sleep(150)
+    return mockAnalytics
+  }
 
-  const cashflow = mockAnalytics.cashflow.filter((row) =>
-    calendarMonthOverlapsYmdRange(row.month, fromP, toP),
-  )
+  let cashflow
+  try {
+    const res = await analyticsApi.cashflowApiV1AnalyticsCashflowGet(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      fromP,
+      toP,
+      undefined,
+      undefined,
+      undefined,
+    )
+    cashflow = (res.data ?? [])
+      .map((row) => ({
+        month: row.month,
+        credit: row.credit ?? 0,
+        debit: row.debit ?? 0,
+        total: row.total ?? 0,
+        count: row.count ?? 0,
+      }))
+      .sort((a, b) => String(b.month).localeCompare(String(a.month)))
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
 
   const categoryBreakdownMap = Object.create(null)
   for (const tx of mockTransactions) {
@@ -422,18 +499,34 @@ export async function getAnalytics({ from, to } = {}) {
     .map(([category, total]) => ({ category, total }))
     .sort((a, b) => b.total - a.total)
 
-  return { cashflow, categoryBreakdown }
+  return {
+    cashflow,
+    categoryBreakdown,
+    cashflowRange: { from: fromP, to: toP },
+  }
 }
 
 const DEFAULT_TOP_MERCHANTS_LIMIT = 50
 
 /**
- * GET /api/v1/analytics/top-merchants — top merchants by spend for the date range.
+ * GET /api/v1/analytics/top-merchants — top payees by spend (merchant, else counterparty name, else `__UNDEFINED__`).
  * When `from` and `to` fall in the same calendar month, passes `month=YYYY-MM`; otherwise omits `month` (backend default window).
- * @param {{ from: string, to: string, limit?: number }} opts
- * @returns {Promise<Array<{ merchant: string, total: number, transactionCount: number }>>}
+ * @param {{ from: string, to: string, limit?: number, includeSelfTransfer?: boolean }} opts
+ *   `includeSelfTransfer` true → API does not filter out self-transfers; false/omitted → exclude rows with `is_self_transfer` true.
+ * @returns {Promise<Array<{
+ *   merchant: string,
+ *   total: number,
+ *   transactionCount: number,
+ *   selfTransferDebitTotal: number,
+ *   selfTransferCount: number,
+ * }>>}
  */
-export async function listTopMerchants({ from, to, limit = DEFAULT_TOP_MERCHANTS_LIMIT } = {}) {
+export async function listTopMerchants({
+  from,
+  to,
+  limit = DEFAULT_TOP_MERCHANTS_LIMIT,
+  includeSelfTransfer = false,
+} = {}) {
   const fromP = normalizeYmd(from)
   const toP = normalizeYmd(to)
   if (!fromP || !toP) {
@@ -441,10 +534,21 @@ export async function listTopMerchants({ from, to, limit = DEFAULT_TOP_MERCHANTS
   }
   const month =
     fromP.slice(0, 7) === toP.slice(0, 7) ? fromP.slice(0, 7) : undefined
+  const includeSelfTransferParam =
+    includeSelfTransfer === true ? true : undefined
   try {
     const res = await analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet(
       month,
       limit,
+      undefined,
+      undefined,
+      undefined,
+      fromP,
+      toP,
+      undefined,
+      undefined,
+      undefined,
+      includeSelfTransferParam,
     )
     return (res.data ?? []).map((row) => {
       const m = row.merchant
@@ -454,6 +558,8 @@ export async function listTopMerchants({ from, to, limit = DEFAULT_TOP_MERCHANTS
         merchant,
         total: row.total ?? 0,
         transactionCount: row.transaction_count ?? 0,
+        selfTransferDebitTotal: row.self_transfer_debit_total ?? 0,
+        selfTransferCount: row.self_transfer_count ?? 0,
       }
     })
   } catch (err) {

@@ -45,7 +45,7 @@ function currentMonthYmd() {
 }
 
 /** First through last day of the previous calendar month. */
-function previousMonthYmd() {
+function lastMonthYmd() {
   const now = new Date()
   const y = now.getFullYear()
   const m = now.getMonth()
@@ -82,7 +82,7 @@ function currentYearYmd() {
  * From / To range control (Transactions page). Opens a popover calendar (anchored bottom-right).
  * First click starts a new range (resetOnSelect); second completes the draft; Apply commits and closes.
  * Presets apply immediately and close. Closing via backdrop discards an unapplied draft.
- * Committed range is shared via DateRangeContext (Transactions, Unparsed Emails, Accounts, Analytics).
+ * Committed range is shared via DateRangeContext (Transactions, Unparsed Emails, Accounts).
  */
 export default function HeaderDateRangeFilter({ fullWidth = false }) {
   const { from, to, setRange } = useDateRange()
@@ -366,11 +366,11 @@ export default function HeaderDateRangeFilter({ fullWidth = false }) {
                   sx={shortcutChipSx}
                 />
                 <Chip
-                  label="Previous Month"
+                  label="Last Month"
                   size="small"
                   variant="outlined"
                   clickable
-                  onClick={() => applyRangeYmd(previousMonthYmd())}
+                  onClick={() => applyRangeYmd(lastMonthYmd())}
                   sx={shortcutChipSx}
                 />
               </Stack>

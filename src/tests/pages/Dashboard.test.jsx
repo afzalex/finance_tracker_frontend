@@ -124,10 +124,10 @@ describe('Dashboard', () => {
     const recentMailLink = screen.getByRole('link', {
       name: /Open source email: Your Whole Foods receipt/,
     })
-    expect(within(recentMailLink).getByText(/Last activity/)).toBeInTheDocument()
+    expect(within(recentMailLink).queryByText(/Last activity/)).not.toBeInTheDocument()
+    expect(recentMailLink.textContent).toMatch(/2023/)
     expect(within(recentMailLink).getByText(/receipts@wholefoods\.com/)).toBeInTheDocument()
     expect(within(recentMailLink).getByText(/Groceries/)).toBeInTheDocument()
-    expect(within(recentMailLink).getByText(/Cached/)).toBeInTheDocument()
     const mailHref = recentMailLink.getAttribute('href')
     expect(mailHref).toMatch(/^\/transactions\?/)
     const mailSp = new URLSearchParams(mailHref.split('?')[1] ?? '')
@@ -142,7 +142,7 @@ describe('Dashboard', () => {
       sortOrder: 'desc',
     })
     expect(financeApi.listTopEmailsWithTransactions).toHaveBeenCalledWith({
-      limit: 5,
+      limit: 6,
     })
   })
 

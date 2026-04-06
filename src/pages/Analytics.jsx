@@ -5,7 +5,9 @@ import {
   CardContent,
   CircularProgress,
   Divider,
+  FormControlLabel,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -15,15 +17,21 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { useMemo } from 'react'
-import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
+import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import AnalyticsMonthsControl from '../components/AnalyticsMonthsControl'
 import InrAmountCell from '../components/InrAmountCell'
 import LoadingBlock from '../components/LoadingBlock'
 import PageHeader from '../components/PageHeader'
-import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
 import { getAnalytics, listTopMerchants } from '../services/financeApi'
+import { formatMonthYearShortHyphen } from '../utils/format'
 import { signedAmountSx } from '../utils/moneySx'
+import {
+  ANALYTICS_MONTHS_Q,
+  parseAnalyticsMonthsParam,
+  ymdRangeForLastNCalendarMonths,
+} from '../utils/analyticsRange'
 import {
   dataCardWidthSx,
   layoutSectionDividerSx,
@@ -34,29 +42,84 @@ import {
 } from '../utils/responsiveTable'
 
 const MERCHANTS_TABLE_MIN = 400
-const CASHFLOW_TABLE_MIN = 480
+
+/** Backend `TOP_MERCHANTS_UNDEFINED_MERCHANT` — no merchant and no counterparty name. */
+const TOP_MERCHANT_UNDEFINED_SENTINEL = '__UNDEFINED__'
+
+function TopMerchantNameCell({ merchant }) {
+  if (merchant === TOP_MERCHANT_UNDEFINED_SENTINEL) {
+    return (
+      <Typography
+        component="span"
+        sx={{ fontStyle: 'italic', color: 'text.secondary' }}
+      >
+        UNDEFINED
+      </Typography>
+    )
+  }
+  return merchant
+}
+const CASHFLOW_TABLE_MIN = 560
 const CATEGORY_TABLE_MIN = 320
+
+/** Calendar YYYY-MM-DD → local `Date` (avoids UTC parse shifting the day). */
+function dateFromYmd(ymd) {
+  const [y, m, d] = String(ymd).split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
 
 export default function Analytics() {
   const theme = useTheme()
   const isMdDown = useMediaQuery(theme.breakpoints.down('md'))
-  const { from: dateRangeFrom, to: dateRangeTo } = useDateRange()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const analyticsMonths = useMemo(
+    () => parseAnalyticsMonthsParam(searchParams.get(ANALYTICS_MONTHS_Q)),
+    [searchParams],
+  )
+  const apiRange = useMemo(
+    () => ymdRangeForLastNCalendarMonths(analyticsMonths),
+    [analyticsMonths],
+  )
   const analyticsKey = useMemo(
-    () => JSON.stringify({ from: dateRangeFrom, to: dateRangeTo }),
-    [dateRangeFrom, dateRangeTo],
+    () => JSON.stringify({ months: analyticsMonths, ...apiRange }),
+    [analyticsMonths, apiRange],
+  )
+  const [includeSelfTransferMerchants, setIncludeSelfTransferMerchants] =
+    useState(false)
+  const topMerchantsResourceKey = useMemo(
+    () => `${analyticsKey}:tmSelf:${includeSelfTransferMerchants}`,
+    [analyticsKey, includeSelfTransferMerchants],
+  )
+  const setAnalyticsMonths = useCallback(
+    (nextMonths) => {
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.set(ANALYTICS_MONTHS_Q, String(nextMonths))
+          return sp
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
   )
   const { status, data, error } = useResource(
     `analytics:${analyticsKey}`,
-    () => getAnalytics({ from: dateRangeFrom, to: dateRangeTo }),
+    () => getAnalytics({ from: apiRange.from, to: apiRange.to }),
   )
   const {
     status: merchantsStatus,
     data: topMerchants,
     error: merchantsError,
   } = useResource(
-    `analyticsTopMerchants:${analyticsKey}`,
+    `analyticsTopMerchants:${topMerchantsResourceKey}`,
     () =>
-      listTopMerchants({ from: dateRangeFrom, to: dateRangeTo }),
+      listTopMerchants({
+        from: apiRange.from,
+        to: apiRange.to,
+        limit: 5,
+        includeSelfTransfer: includeSelfTransferMerchants,
+      }),
   )
 
   const tablesLoading = status === 'loading'
@@ -78,7 +141,11 @@ export default function Analytics() {
             alignSelf: { md: 'center' },
           }}
         >
-          <HeaderDateRangeFilter fullWidth={isMdDown} />
+          <AnalyticsMonthsControl
+            value={analyticsMonths}
+            onChange={setAnalyticsMonths}
+            fullWidth={isMdDown}
+          />
         </Box>
       </Stack>
 
@@ -108,12 +175,35 @@ export default function Analytics() {
             }}
           >
             <CardContent sx={{ minWidth: 0 }}>
-              <Typography variant="h6">Top Merchants</Typography>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+                justifyContent="space-between"
+                gap={1}
+                sx={{ mb: 0 }}
+              >
+                <Typography variant="h6">Top merchants and counterparties</Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={includeSelfTransferMerchants}
+                      onChange={(_, c) => setIncludeSelfTransferMerchants(c)}
+                      inputProps={{
+                        'aria-label':
+                          'Include self-transfer transactions in top merchants',
+                      }}
+                    />
+                  }
+                  label="Include self-transfers"
+                  sx={{ m: 0, flexShrink: 0 }}
+                />
+              </Stack>
               <Divider sx={layoutSectionDividerSx} />
               <Box sx={tableHorizontalScrollSx}>
                 <Table
                   size="small"
-                  aria-label="Top Merchants table"
+                  aria-label="Top merchants and counterparties table"
                   sx={[
                     { minWidth: MERCHANTS_TABLE_MIN, width: '100%' },
                     tableSmallScreenTextSx(theme),
@@ -121,8 +211,8 @@ export default function Analytics() {
                 >
                 <TableHead>
                   <TableRow>
-                    <TableCell>Merchant</TableCell>
-                    <TableCell align="right">Txns</TableCell>
+                    <TableCell>Merchant / counterparty</TableCell>
+                    <TableCell align="right">Transactions</TableCell>
                     <TableCell align="right">Total</TableCell>
                   </TableRow>
                 </TableHead>
@@ -144,7 +234,9 @@ export default function Analytics() {
                   ) : (
                     topMerchants.map((row, i) => (
                       <TableRow key={`${row.merchant}:${i}`} hover>
-                        <TableCell>{row.merchant}</TableCell>
+                        <TableCell>
+                          <TopMerchantNameCell merchant={row.merchant} />
+                        </TableCell>
                         <TableCell
                           align="right"
                           sx={{ fontVariantNumeric: 'tabular-nums' }}
@@ -165,7 +257,32 @@ export default function Analytics() {
 
           <Card variant="outlined" sx={dataCardWidthSx}>
             <CardContent sx={{ minWidth: 0 }}>
-              <Typography variant="h6">Cashflow</Typography>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                alignItems={{ xs: 'flex-start', sm: 'baseline' }}
+                justifyContent="space-between"
+                gap={0.75}
+                sx={{ mb: 0 }}
+              >
+                <Typography variant="h6" component="h2">
+                  Cashflow
+                </Typography>
+                {data?.cashflowRange?.from && data?.cashflowRange?.to ? (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      textAlign: { xs: 'left', sm: 'right' },
+                      alignSelf: { xs: 'stretch', sm: 'auto' },
+                      whiteSpace: { sm: 'nowrap' },
+                    }}
+                    aria-label={`Cashflow from ${data.cashflowRange.from} through ${data.cashflowRange.to}`}
+                  >
+                    {formatMonthYearShortHyphen(dateFromYmd(data.cashflowRange.from))} –{' '}
+                    {formatMonthYearShortHyphen(dateFromYmd(data.cashflowRange.to))}
+                  </Typography>
+                ) : null}
+              </Stack>
               <Divider sx={layoutSectionDividerSx} />
               <Box sx={tableHorizontalScrollSx}>
                 <Table
@@ -179,29 +296,49 @@ export default function Analytics() {
                 <TableHead>
                   <TableRow>
                     <TableCell>Month</TableCell>
-                    <TableCell align="right">Income</TableCell>
-                    <TableCell align="right">Expense</TableCell>
-                    <TableCell align="right">Net</TableCell>
+                    <TableCell align="right">Transactions</TableCell>
+                    <TableCell align="right">Credit</TableCell>
+                    <TableCell align="right">Debit</TableCell>
+                    <TableCell align="right">Total</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {data?.cashflow?.map((row) => {
-                    const net = row.income - row.expense
-                    return (
-                      <TableRow key={row.month} hover>
-                        <TableCell>{row.month}</TableCell>
-                        <TableCell align="right">
-                          <InrAmountCell value={row.income} />
-                        </TableCell>
-                        <TableCell align="right">
-                          <InrAmountCell value={-row.expense} />
-                        </TableCell>
-                        <TableCell align="right">
-                          <InrAmountCell value={net} figureSx={signedAmountSx(net)} />
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                  {(data?.cashflow?.length ?? 0) === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography variant="body2" color="text.secondary">
+                          No cashflow rows for this range.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    data.cashflow.map((row) => {
+                      const total = row.total
+                      return (
+                        <TableRow key={row.month} hover>
+                          <TableCell>{row.month}</TableCell>
+                          <TableCell
+                            align="right"
+                            sx={{ fontVariantNumeric: 'tabular-nums' }}
+                          >
+                            {row.count}
+                          </TableCell>
+                          <TableCell align="right">
+                            <InrAmountCell value={row.credit} />
+                          </TableCell>
+                          <TableCell align="right">
+                            <InrAmountCell value={-row.debit} />
+                          </TableCell>
+                          <TableCell align="right">
+                            <InrAmountCell
+                              value={total}
+                              figureSx={signedAmountSx(total)}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
                 </TableBody>
               </Table>
               </Box>

@@ -39,13 +39,9 @@ export default function AppShell() {
     () => [
       { label: 'Dashboard', to: '/', icon: <LayoutDashboard size={20} /> },
       { label: 'Transactions', to: '/transactions', icon: <ListIcon size={20} /> },
-      { label: 'Unparsed Emails', to: '/emails/unparsed', icon: <Mail size={20} /> },
-      {
-        label: 'Accounts',
-        to: '/accounts',
-        icon: <Landmark size={20} />,
-      },
+      { label: 'Accounts', to: '/accounts', icon: <Landmark size={20} /> },
       { label: 'Analytics', to: '/analytics', icon: <BarChart3 size={20} /> },
+      { label: 'Unparsed Emails', to: '/emails/unparsed', icon: <Mail size={20} /> },
       { label: 'Settings', to: '/settings', icon: <Settings size={20} /> },
     ],
     [],

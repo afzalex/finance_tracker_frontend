@@ -1,4 +1,4 @@
-import { isValidElement, useCallback, useState } from 'react'
+import { isValidElement, useCallback, useEffect, useState } from 'react'
 import {
   Box,
   Button,
@@ -7,7 +7,9 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   Stack,
+  Switch,
   Typography,
 } from '@mui/material'
 import useDetailDialogSlotProps from '../hooks/useDetailDialogSlotProps'
@@ -17,6 +19,7 @@ import {
   layoutSectionSpacing,
 } from '../utils/responsiveTable'
 import EmailSourcePanel from './EmailSourcePanel'
+import { patchTransaction } from '../services/financeApi'
 import { formatDateTime, formatInrAmount } from '../utils/format'
 
 function DetailLine({ label, value }) {
@@ -77,6 +80,8 @@ export default function TransactionDetailDialog({
   onNotify,
   /** After successful email reprocess: refresh lists, then dialog calls `onClose`. */
   onReprocessComplete,
+  /** Called with the mapped row after PATCH `is_self_transfer` succeeds. */
+  onRowUpdate,
 }) {
   const tx = row?.raw
   const signed = tx
@@ -86,11 +91,45 @@ export default function TransactionDetailDialog({
     : 0
 
   const [detailTab, setDetailTab] = useState(initialTab ?? 'transaction')
+  const [selfTransfer, setSelfTransfer] = useState(false)
+  const [savingSelfTransfer, setSavingSelfTransfer] = useState(false)
   const [openReprocessConfirm, setOpenReprocessConfirm] = useState(null)
   const bindOpenReprocessConfirm = useCallback((fn) => {
     setOpenReprocessConfirm(() => fn)
   }, [])
   const detailSlotProps = useDetailDialogSlotProps()
+
+  useEffect(() => {
+    setSelfTransfer(Boolean(tx?.is_self_transfer))
+  }, [tx?.id, tx?.is_self_transfer])
+
+  const handleSelfTransferChange = useCallback(
+    async (_event, checked) => {
+      if (!tx?.id || savingSelfTransfer) return
+      const prev = selfTransfer
+      setSelfTransfer(checked)
+      setSavingSelfTransfer(true)
+      try {
+        const updated = await patchTransaction(tx.id, {
+          isSelfTransfer: checked,
+        })
+        setSelfTransfer(Boolean(updated.raw?.is_self_transfer))
+        onRowUpdate?.(updated)
+      } catch (err) {
+        setSelfTransfer(prev)
+        onNotify?.(err instanceof Error ? err.message : 'Update failed')
+      } finally {
+        setSavingSelfTransfer(false)
+      }
+    },
+    [
+      onNotify,
+      onRowUpdate,
+      savingSelfTransfer,
+      selfTransfer,
+      tx?.id,
+    ],
+  )
 
   const titleId =
     detailTab === 'email' ? 'detail-source-title' : 'transaction-detail-title'
@@ -152,7 +191,64 @@ export default function TransactionDetailDialog({
             >
               <DetailLine label="ID" value={tx.id} />
               <DetailLine label="Transacted" value={formatDateTime(tx.transacted_at)} />
-              <DetailLine label="Created" value={formatDateTime(tx.created_at)} />
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                flexWrap="wrap"
+                columnGap={2}
+                rowGap={1}
+                sx={{ py: { xs: 0.5, md: 0.75 } }}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={{ xs: 0, sm: 2 }}
+                  sx={{ minWidth: 0, flex: '1 1 auto' }}
+                >
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ minWidth: { sm: 160 }, flexShrink: 0 }}
+                  >
+                    Created
+                  </Typography>
+                  <Typography
+                    component="span"
+                    variant="body2"
+                    sx={{ wordBreak: 'break-word' }}
+                  >
+                    {formatDateTime(tx.created_at)}
+                  </Typography>
+                </Stack>
+                <FormControlLabel
+                  sx={{
+                    ml: { xs: 0, sm: 'auto' },
+                    mr: 0,
+                    flexShrink: 0,
+                    alignItems: 'center',
+                  }}
+                  control={
+                    <Switch
+                      checked={selfTransfer}
+                      onChange={handleSelfTransferChange}
+                      disabled={savingSelfTransfer}
+                      size="small"
+                      inputProps={{ 'aria-label': 'Self Transfer' }}
+                    />
+                  }
+                  label={
+                    <Typography
+                      component="span"
+                      variant="body2"
+                      color="text.secondary"
+                    >
+                      Self Transfer
+                    </Typography>
+                  }
+                  labelPlacement="start"
+                />
+              </Stack>
               <Divider sx={layoutSectionDividerSx} />
               <DetailLine
                 label="Amount"

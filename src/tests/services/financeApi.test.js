@@ -10,6 +10,7 @@ import {
   getFetchedEmailByMailId,
   listTopEmailsWithTransactions,
   listTransactions,
+  patchTransaction,
   findFirstTransactionRowByMailId,
   getDashboardStats,
   getTransactionSummary,
@@ -27,10 +28,12 @@ vi.mock('../../services/apiConfig', () => ({
   },
   transactionsApi: {
     listTransactionsApiV1TransactionsGet: vi.fn(),
+    patchTransactionApiV1TransactionsTransactionIdPatch: vi.fn(),
   },
   analyticsApi: {
     transactionSummaryApiV1AnalyticsTransactionSummaryGet: vi.fn(),
     topMerchantsApiV1AnalyticsTopMerchantsGet: vi.fn(),
+    cashflowApiV1AnalyticsCashflowGet: vi.fn(),
   },
   accountsApi: {
     listAccountsApiV1AccountsGet: vi.fn(),
@@ -190,9 +193,11 @@ describe('listTransactions', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       'coffee',
       'transacted_at',
       'desc',
+      undefined,
     )
 
     expect(out.total).toBe(42)
@@ -221,8 +226,34 @@ describe('listTransactions', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       'transacted_at',
       'desc',
+      undefined,
+    )
+  })
+
+  it('passes counterparty as a query param', async () => {
+    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 10 },
+    })
+    await listTransactions({ counterparty: '  Acme Co ', page: 1, pageSize: 10 })
+    expect(transactionsApi.listTransactionsApiV1TransactionsGet).toHaveBeenCalledWith(
+      1,
+      10,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'Acme Co',
+      undefined,
+      'transacted_at',
+      'desc',
+      undefined,
     )
   })
 
@@ -292,6 +323,45 @@ describe('findFirstTransactionRowByMailId', () => {
     await expect(
       findFirstTransactionRowByMailId('missing', { pageSize: 25, maxPages: 2 }),
     ).resolves.toBeNull()
+  })
+})
+
+describe('patchTransaction', () => {
+  beforeEach(() => {
+    vi.mocked(
+      transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch,
+    ).mockReset()
+  })
+
+  it('calls PATCH and maps the updated row', async () => {
+    const apiTx = {
+      id: 7,
+      mail_id: 'm7',
+      transacted_at: '2024-06-01T12:00:00Z',
+      created_at: '2024-06-01T12:00:01Z',
+      amount_parsed: 10,
+      direction: 'DEBIT',
+      amount: '10',
+      currency: 'INR',
+      is_self_transfer: true,
+    }
+    vi.mocked(
+      transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch,
+    ).mockResolvedValue({ data: apiTx })
+
+    const row = await patchTransaction(7, { isSelfTransfer: true })
+
+    expect(
+      transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch,
+    ).toHaveBeenCalledWith(7, { is_self_transfer: true })
+    expect(row.id).toBe('7')
+    expect(row.raw.is_self_transfer).toBe(true)
+  })
+
+  it('throws on invalid id', async () => {
+    await expect(
+      patchTransaction('x', { isSelfTransfer: false }),
+    ).rejects.toThrow('Invalid transaction id')
   })
 })
 
@@ -507,11 +577,29 @@ describe('listTopMerchants', () => {
     await expect(
       listTopMerchants({ from: '2026-04-01', to: '2026-04-15', limit: 20 }),
     ).resolves.toEqual([
-      { merchant: 'Acme', total: 10, transactionCount: 2 },
+      {
+        merchant: 'Acme',
+        total: 10,
+        transactionCount: 2,
+        selfTransferDebitTotal: 0,
+        selfTransferCount: 0,
+      },
     ])
     expect(
       analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet,
-    ).toHaveBeenCalledWith('2026-04', 20)
+    ).toHaveBeenCalledWith(
+      '2026-04',
+      20,
+      undefined,
+      undefined,
+      undefined,
+      '2026-04-01',
+      '2026-04-15',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    )
   })
 
   it('omits month when range spans multiple months', async () => {
@@ -522,7 +610,19 @@ describe('listTopMerchants', () => {
     await listTopMerchants({ from: '2026-03-01', to: '2026-04-30' })
     expect(
       analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet,
-    ).toHaveBeenCalledWith(undefined, 50)
+    ).toHaveBeenCalledWith(
+      undefined,
+      50,
+      undefined,
+      undefined,
+      undefined,
+      '2026-03-01',
+      '2026-04-30',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    )
   })
 
   it('throws with apiErrorMessage when the request fails', async () => {
@@ -545,5 +645,89 @@ describe('Mock Services', () => {
   it('getAnalytics resolves with mockAnalytics', async () => {
     const analytics = await getAnalytics()
     expect(analytics).toEqual(mockAnalytics)
+  })
+})
+
+describe('getAnalytics', () => {
+  beforeEach(() => {
+    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockReset()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('calls cashflow API with the same from/to as the analytics period', async () => {
+    vi.setSystemTime(new Date(2026, 0, 15, 12, 0, 0))
+    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockResolvedValue({
+      data: [
+        {
+          month: '2026-01',
+          credit: 100,
+          debit: 50,
+          total: 50,
+          count: 3,
+        },
+      ],
+    })
+
+    const out = await getAnalytics({ from: '2026-01-01', to: '2026-01-31' })
+
+    expect(analyticsApi.cashflowApiV1AnalyticsCashflowGet).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '2026-01-01',
+      '2026-01-31',
+      undefined,
+      undefined,
+      undefined,
+    )
+    expect(out.cashflow).toEqual([
+      { month: '2026-01', credit: 100, debit: 50, total: 50, count: 3 },
+    ])
+    expect(out.cashflowRange).toEqual({
+      from: '2026-01-01',
+      to: '2026-01-31',
+    })
+    expect(Array.isArray(out.categoryBreakdown)).toBe(true)
+  })
+
+  it('sorts cashflow by month descending', async () => {
+    vi.setSystemTime(new Date(2026, 2, 10, 12, 0, 0))
+    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockResolvedValue({
+      data: [
+        { month: '2026-01', credit: 1, debit: 0, total: 1, count: 1 },
+        { month: '2026-03', credit: 3, debit: 0, total: 3, count: 1 },
+        { month: '2026-02', credit: 2, debit: 0, total: 2, count: 1 },
+      ],
+    })
+
+    const out = await getAnalytics({ from: '2026-01-01', to: '2026-03-31' })
+
+    expect(out.cashflow.map((r) => r.month)).toEqual(['2026-03', '2026-02', '2026-01'])
+  })
+
+  it('passes through the requested from/to to the cashflow API', async () => {
+    vi.setSystemTime(new Date(2026, 1, 20, 12, 0, 0))
+    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockResolvedValue({
+      data: [],
+    })
+
+    await getAnalytics({ from: '2025-03-10', to: '2026-02-20' })
+
+    expect(analyticsApi.cashflowApiV1AnalyticsCashflowGet).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '2025-03-10',
+      '2026-02-20',
+      undefined,
+      undefined,
+      undefined,
+    )
   })
 })

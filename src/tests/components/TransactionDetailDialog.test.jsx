@@ -11,10 +11,15 @@ vi.mock('../../services/financeApi', async (importOriginal) => {
     ...actual,
     getFetchedEmailByMailId: vi.fn(),
     reprocessEmailByMailId: vi.fn(),
+    patchTransaction: vi.fn(),
   }
 })
 
-import { getFetchedEmailByMailId, reprocessEmailByMailId } from '../../services/financeApi'
+import {
+  getFetchedEmailByMailId,
+  patchTransaction,
+  reprocessEmailByMailId,
+} from '../../services/financeApi'
 
 function renderWithRouter(ui, { initialEntries = ['/'] } = {}) {
   return renderWithTheme(
@@ -54,6 +59,7 @@ function makeRow(overrides = {}) {
 
 describe('TransactionDetailDialog', () => {
   beforeEach(() => {
+    vi.mocked(patchTransaction).mockReset()
     vi.mocked(getFetchedEmailByMailId).mockReset()
     vi.mocked(getFetchedEmailByMailId).mockResolvedValue({
       mail_id: 'gmail-msg-abc',
@@ -83,6 +89,9 @@ describe('TransactionDetailDialog', () => {
     expect(within(dialog).getByText('Transaction Details')).toBeInTheDocument()
     expect(within(dialog).getByText('Shop')).toBeInTheDocument()
     expect(within(dialog).getByText('99')).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('switch', { name: 'Self Transfer' }),
+    ).not.toBeChecked()
     expect(
       within(dialog).getByRole('button', { name: 'Transaction' }),
     ).toBeInTheDocument()
@@ -294,6 +303,50 @@ describe('TransactionDetailDialog', () => {
     })
     expect(screen.queryByRole('link', { name: 'Create parser' })).not.toBeInTheDocument()
     expect(screen.queryByText('No Parser Found')).not.toBeInTheDocument()
+  })
+
+  it('shows Self transfer checked when is_self_transfer is true', () => {
+    renderWithRouter(
+      <TransactionDetailDialog
+        open
+        onClose={vi.fn()}
+        row={makeRow({ raw: { is_self_transfer: true } })}
+      />,
+    )
+    const dialog = screen.getByRole('dialog')
+    expect(
+      within(dialog).getByRole('switch', { name: 'Self Transfer' }),
+    ).toBeChecked()
+  })
+
+  it('patches self transfer and calls onRowUpdate immediately', async () => {
+    const user = userEvent.setup()
+    const onRowUpdate = vi.fn()
+    const row = makeRow()
+    vi.mocked(patchTransaction).mockResolvedValue(
+      makeRow({ raw: { ...row.raw, is_self_transfer: true } }),
+    )
+
+    renderWithRouter(
+      <TransactionDetailDialog
+        open
+        onClose={vi.fn()}
+        row={row}
+        onRowUpdate={onRowUpdate}
+      />,
+    )
+
+    const dialog = screen.getByRole('dialog')
+    const sw = within(dialog).getByRole('switch', { name: 'Self Transfer' })
+    await user.click(sw)
+
+    await waitFor(() => {
+      expect(patchTransaction).toHaveBeenCalledWith(99, { isSelfTransfer: true })
+    })
+    await waitFor(() => {
+      expect(onRowUpdate).toHaveBeenCalledTimes(1)
+    })
+    expect(sw).toBeChecked()
   })
 
   it('calls onClose when Close is clicked', async () => {

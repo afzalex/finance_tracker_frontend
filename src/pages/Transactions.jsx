@@ -50,7 +50,16 @@ import {
   tableSmallScreenTextSx,
 } from '../utils/responsiveTable'
 import { parseSafeReturnToParam } from '../utils/safeReturnTo'
+import { DATE_RANGE_Q } from '../utils/dateRangeUrl'
 import { formatDateTime } from '../utils/format'
+
+/** Counterparty filter: unnamed rows (API sentinel); shown after “All”. */
+const COUNTERPARTY_NO_NAME_LABEL = 'No Counterparty'
+
+const cpFilterMutedItemSx = {
+  fontStyle: 'italic',
+  color: 'text.secondary',
+}
 
 const TRANSACTIONS_TABLE_MIN_WIDTH = 920
 
@@ -101,6 +110,7 @@ const TX_SORT_API = {
 const TX_Q = {
   q: 'q',
   provider: 'provider',
+  counterparty: 'counterparty',
   direction: 'direction',
   sort: 'sort',
   mail_id: 'mail_id',
@@ -137,6 +147,7 @@ export default function Transactions() {
 
   const query = searchParams.get(TX_Q.q) ?? ''
   const providerFilter = searchParams.get(TX_Q.provider) ?? ''
+  const counterpartyFilter = searchParams.get(TX_Q.counterparty) ?? ''
   const directionFilter = searchParams.get(TX_Q.direction) ?? ''
   const mailIdParam = (searchParams.get(TX_Q.mail_id) ?? '').trim()
   const page = useMemo(() => {
@@ -194,25 +205,36 @@ export default function Transactions() {
     }
     if (dateRangeKeyRef.current === key) return
     dateRangeKeyRef.current = key
+    // Keep `from`/`to` in sync with DateRangeContext. Using only `prev` here can race with
+    // `setRange` (child effects run before the provider’s URL update commits) and briefly
+    // write stale `from`/`to` back into the URL.
     setSearchParams(
       (prev) => {
         const sp = new URLSearchParams(prev)
-        if (sp.get('page') !== '0') {
-          sp.set('page', '0')
-          return sp
-        }
-        return prev
+        sp.set(DATE_RANGE_Q.from, dateRangeFrom)
+        sp.set(DATE_RANGE_Q.to, dateRangeTo)
+        sp.set('page', '0')
+        return sp
       },
       { replace: true },
     )
   }, [dateRangeFrom, dateRangeTo, setSearchParams])
 
-  const distinctKey = 'transactions:distinct-catalog'
+  const distinctKey = useMemo(
+    () =>
+      JSON.stringify({
+        from: dateRangeFrom,
+        to: dateRangeTo,
+      }),
+    [dateRangeFrom, dateRangeTo],
+  )
   const {
     status: distinctStatus,
     data: distinctData,
     error: distinctError,
-  } = useResource(distinctKey, () => listTransactionDistinctCatalog())
+  } = useResource(distinctKey, () =>
+    listTransactionDistinctCatalog({ from: dateRangeFrom, to: dateRangeTo }),
+  )
 
   // Normalize page/ps into the key so the first paint matches post-hydration URL (avoids two
   // useResource stores when `page`/`ps` are injected by the effect below).
@@ -221,6 +243,7 @@ export default function Transactions() {
       JSON.stringify({
         q: searchParams.get(TX_Q.q) ?? '',
         provider: searchParams.get(TX_Q.provider) ?? '',
+        counterparty: searchParams.get(TX_Q.counterparty) ?? '',
         direction: searchParams.get(TX_Q.direction) ?? '',
         sort: searchParams.get(TX_Q.sort) ?? '',
         page,
@@ -238,6 +261,7 @@ export default function Transactions() {
       page: page + 1,
       pageSize: rowsPerPage,
       provider: providerFilter,
+      counterparty: counterpartyFilter || undefined,
       direction: directionFilter || undefined,
       from: dateRangeFrom,
       to: dateRangeTo,
@@ -341,6 +365,7 @@ export default function Transactions() {
       pageSize: rowsPerPage,
       query,
       provider: providerFilter,
+      counterparty: counterpartyFilter || undefined,
       direction: directionFilter || undefined,
       from: dateRangeFrom,
       to: dateRangeTo,
@@ -371,6 +396,7 @@ export default function Transactions() {
     selectedRow,
     query,
     providerFilter,
+    counterpartyFilter,
     directionFilter,
     dateRangeFrom,
     dateRangeTo,
@@ -391,6 +417,20 @@ export default function Transactions() {
   }
 
   const providerOptions = distinctData?.providers ?? []
+  const unnamedCounterpartyKey =
+    distinctData?.unnamed_counterparty_key ?? '__NO_COUNTERPARTY__'
+  const counterpartyRestOptions = useMemo(() => {
+    const raw = distinctData?.counterparties ?? []
+    return raw
+      .filter((c) => c !== unnamedCounterpartyKey)
+      .sort((a, b) =>
+        String(a).localeCompare(String(b), undefined, { sensitivity: 'base' }),
+      )
+  }, [distinctData?.counterparties, unnamedCounterpartyKey])
+  const hasUnnamedCounterpartyOption = useMemo(
+    () => (distinctData?.counterparties ?? []).includes(unnamedCounterpartyKey),
+    [distinctData?.counterparties, unnamedCounterpartyKey],
+  )
 
   const openDetail = useCallback(
     (
@@ -488,6 +528,71 @@ export default function Transactions() {
             {providerOptions.map((p) => (
               <MenuItem key={p} value={p}>
                 {p}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl
+          size="small"
+          sx={{
+            display: { xs: 'none', md: 'flex' },
+            flex: { md: '0 1 auto' },
+            minWidth: { md: 180 },
+            width: { md: 'auto' },
+          }}
+          disabled={distinctStatus !== 'success'}
+        >
+          <InputLabel id="tx-filter-counterparty-label">Counterparty</InputLabel>
+          <Select
+            labelId="tx-filter-counterparty-label"
+            label="Counterparty"
+            value={counterpartyFilter}
+            renderValue={(selected) => {
+              if (selected === '') {
+                return (
+                  <Typography component="span" sx={cpFilterMutedItemSx}>
+                    All
+                  </Typography>
+                )
+              }
+              if (selected === unnamedCounterpartyKey) {
+                return (
+                  <Typography component="span" sx={cpFilterMutedItemSx}>
+                    {COUNTERPARTY_NO_NAME_LABEL}
+                  </Typography>
+                )
+              }
+              return selected
+            }}
+            onChange={(e) => {
+              const v = e.target.value
+              setSearchParams(
+                (prev) => {
+                  const sp = new URLSearchParams(prev)
+                  if (!v) sp.delete(TX_Q.counterparty)
+                  else sp.set(TX_Q.counterparty, v)
+                  sp.set('page', '0')
+                  return sp
+                },
+                { replace: true },
+              )
+            }}
+          >
+            <MenuItem value="">
+              <Typography component="span" sx={cpFilterMutedItemSx}>
+                All
+              </Typography>
+            </MenuItem>
+            {hasUnnamedCounterpartyOption ? (
+              <MenuItem key={unnamedCounterpartyKey} value={unnamedCounterpartyKey}>
+                <Typography component="span" sx={cpFilterMutedItemSx}>
+                  {COUNTERPARTY_NO_NAME_LABEL}
+                </Typography>
+              </MenuItem>
+            ) : null}
+            {counterpartyRestOptions.map((c) => (
+              <MenuItem key={c} value={c}>
+                {c}
               </MenuItem>
             ))}
           </Select>
@@ -766,6 +871,7 @@ export default function Transactions() {
         }}
         onNotify={(message) => setSnack({ open: true, message })}
         onReprocessComplete={() => setListRefreshKey((k) => k + 1)}
+        onRowUpdate={(updated) => setSelectedRow(updated)}
       />
 
       <Portal>
