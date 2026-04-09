@@ -673,7 +673,7 @@ export default function ClassificationsSection({
             <Divider />
 
             <Typography variant="subtitle2" color="text.secondary">
-              Subject / Sender
+              Matcher
             </Typography>
             <StackFormGrid>
               <TextField
@@ -684,20 +684,6 @@ export default function ClassificationsSection({
                   setForm((f) => ({
                     ...f,
                     subject_match_regex: e.target.value,
-                  }))
-                }
-                fullWidth
-                multiline
-                minRows={3}
-              />
-              <TextField
-                size="small"
-                label="Subject Extract Regex"
-                value={form.subject_extract_regex}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    subject_extract_regex: e.target.value,
                   }))
                 }
                 fullWidth
@@ -717,16 +703,7 @@ export default function ClassificationsSection({
                 fullWidth
                 multiline
                 minRows={3}
-                sx={{ gridColumn: { sm: '1 / -1' } }}
               />
-            </StackFormGrid>
-
-            <Divider />
-
-            <Typography variant="subtitle2" color="text.secondary">
-              Body / Snippet
-            </Typography>
-            <StackFormGrid>
               <TextField
                 size="small"
                 label="Body Match Regex"
@@ -740,9 +717,33 @@ export default function ClassificationsSection({
                 fullWidth
                 multiline
                 minRows={3}
+                sx={{ gridColumn: { sm: '1 / -1' } }}
+              />
+            </StackFormGrid>
+
+            <Divider />
+
+            <Typography variant="subtitle2" color="text.secondary">
+              Extractor
+            </Typography>
+            <StackFormGrid>
+              <TextField
+                size="small"
+                label="Subject Extract Regex"
+                value={form.subject_extract_regex}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    subject_extract_regex: e.target.value,
+                  }))
+                }
+                fullWidth
+                multiline
+                minRows={2}
               />
               <TextField
                 size="small"
+                label="Snippet Extract Regex"
                 value={form.snippet_extract_regex}
                 onChange={(e) =>
                   setForm((f) => ({
@@ -750,10 +751,9 @@ export default function ClassificationsSection({
                     snippet_extract_regex: e.target.value,
                   }))
                 }
-                label="Snippet Extract Regex"
                 fullWidth
                 multiline
-                minRows={3}
+                minRows={2}
               />
               <TextField
                 size="small"
@@ -767,7 +767,7 @@ export default function ClassificationsSection({
                 }
                 fullWidth
                 multiline
-                minRows={3}
+                minRows={2}
                 sx={{ gridColumn: { sm: '1 / -1' } }}
               />
             </StackFormGrid>

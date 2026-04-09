@@ -158,11 +158,11 @@ describe('UnparsedEmails', () => {
     const expectedReturn = encodeURIComponent('/emails/unparsed/2')
     expect(screen.getByRole('link', { name: 'transaction' })).toHaveAttribute(
       'href',
-      `/settings/rules/classifications/12?returnTo=${expectedReturn}`,
+      `/settings/classifications/12?returnTo=${expectedReturn}`,
     )
     expect(screen.getByRole('link', { name: 'default' })).toHaveAttribute(
       'href',
-      `/settings/rules/parsers/34?returnTo=${expectedReturn}`,
+      `/settings/parsers/34?returnTo=${expectedReturn}`,
     )
 
     await user.click(screen.getByRole('button', { name: /^Reprocess$/ }))

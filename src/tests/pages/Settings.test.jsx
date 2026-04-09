@@ -16,6 +16,21 @@ vi.mock('../../services/financeApi', () => ({
   updateAppConfig: vi.fn(),
 }))
 
+vi.mock('../../services/rulesApi', () => ({
+  listClassifications: vi.fn().mockResolvedValue([]),
+  createClassification: vi.fn(),
+  patchClassification: vi.fn(),
+  deactivateClassification: vi.fn(),
+  listParsers: vi.fn().mockResolvedValue([]),
+  createParser: vi.fn(),
+  patchParser: vi.fn(),
+  deactivateParser: vi.fn(),
+  listExclusionRules: vi.fn().mockResolvedValue([]),
+  createExclusionRule: vi.fn(),
+  patchExclusionRule: vi.fn(),
+  deactivateExclusionRule: vi.fn(),
+}))
+
 const sampleMeta = {
   app_version: '0.0.0-test',
   docs_url: 'http://localhost:8000/docs',
@@ -30,20 +45,16 @@ describe('Settings', () => {
   it('renders settings page elements', () => {
     renderWithTheme(
       <AppMetaProvider initialMeta={sampleMeta}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={['/settings/classifications']}>
           <Settings />
         </MemoryRouter>
       </AppMetaProvider>,
     )
 
     expect(screen.getByText('Settings')).toBeInTheDocument()
-    expect(
-      screen.getByText('Reprocess cached emails, manage rules, and view backend status.'),
-    ).toBeInTheDocument()
-    expect(screen.getByText('API')).toBeInTheDocument()
-    expect(screen.getByText('0.0.0-test')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /Reprocess All Emails/i }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Classifications' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Parsers' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Rules' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'System' })).toBeInTheDocument()
   })
 })

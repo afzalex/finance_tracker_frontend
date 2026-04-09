@@ -1,0 +1,78 @@
+# ── Finance Tracker Frontend — Test Workflow ───────────────────────────────────
+#
+# Runs on every push to `dev`.
+#
+# Steps:
+#   1. Checkout this (frontend) repo.
+#   2. Clone the backend repo to generate the OpenAPI spec.
+#   3. Export the OpenAPI spec from the FastAPI app.
+#   4. Generate the TypeScript Axios client into src/api/.
+#   5. Run the Vitest suite.
+#
+# ── Why the backend clone is needed ───────────────────────────────────────────
+#
+# src/services/apiConfig.js imports from src/api/, which is a generated
+# TypeScript client produced from the backend's OpenAPI spec. The directory is
+# gitignored (generated artifact), so it must be built in CI before tests run.
+#
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Test
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone backend repo
+        run: |
+          git config --global url."https://oauth2:${{ secrets.GITHUB_TOKEN }}@gitea.afzalex.com/".insteadOf "ssh://git@gitea.afzalex.com:2222/"
+          git config --global http.sslVerify false
+          git clone https://oauth2:${{ secrets.GITHUB_TOKEN }}@gitea.afzalex.com/fzsystems/finance_tracker_backend.git /tmp/backend
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r /tmp/backend/requirements.txt
+
+      - name: Export OpenAPI spec
+        # PYTHONPATH must be the parent of backend/ so `from backend.app.main` resolves.
+        run: |
+          PYTHONPATH=/tmp python /tmp/backend/scripts/export_openapi.py /tmp/backend/openapi.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Java (required by openapi-generator-cli)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends default-jre-headless
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Generate TypeScript API client
+        run: |
+          npx -y @openapitools/openapi-generator-cli generate \
+            -i /tmp/backend/openapi.json \
+            -g typescript-axios \
+            -o ./src/api \
+            --additional-properties="npmName=@finance-tracker/api,supportsES6=true,withSeparateModelsAndApi=true,apiPackage=api,modelPackage=models" \
+            --global-property apis,models,supportingFiles,modelDocs=false,apiDocs=false
+
+      - name: Run tests
+        run: npm run test:run

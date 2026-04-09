@@ -10,7 +10,6 @@ import {
   getFetchedEmailByMailId,
   listTopEmailsWithTransactions,
   listTransactions,
-  patchTransaction,
   findFirstTransactionRowByMailId,
   getDashboardStats,
   getTransactionSummary,
@@ -28,7 +27,6 @@ vi.mock('../../services/apiConfig', () => ({
   },
   transactionsApi: {
     listTransactionsApiV1TransactionsGet: vi.fn(),
-    patchTransactionApiV1TransactionsTransactionIdPatch: vi.fn(),
   },
   analyticsApi: {
     transactionSummaryApiV1AnalyticsTransactionSummaryGet: vi.fn(),
@@ -326,45 +324,6 @@ describe('findFirstTransactionRowByMailId', () => {
   })
 })
 
-describe('patchTransaction', () => {
-  beforeEach(() => {
-    vi.mocked(
-      transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch,
-    ).mockReset()
-  })
-
-  it('calls PATCH and maps the updated row', async () => {
-    const apiTx = {
-      id: 7,
-      mail_id: 'm7',
-      transacted_at: '2024-06-01T12:00:00Z',
-      created_at: '2024-06-01T12:00:01Z',
-      amount_parsed: 10,
-      direction: 'DEBIT',
-      amount: '10',
-      currency: 'INR',
-      is_self_transfer: true,
-    }
-    vi.mocked(
-      transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch,
-    ).mockResolvedValue({ data: apiTx })
-
-    const row = await patchTransaction(7, { isSelfTransfer: true })
-
-    expect(
-      transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch,
-    ).toHaveBeenCalledWith(7, { is_self_transfer: true })
-    expect(row.id).toBe('7')
-    expect(row.raw.is_self_transfer).toBe(true)
-  })
-
-  it('throws on invalid id', async () => {
-    await expect(
-      patchTransaction('x', { isSelfTransfer: false }),
-    ).rejects.toThrow('Invalid transaction id')
-  })
-})
-
 describe('listAccounts', () => {
   beforeEach(() => {
     vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockReset()
@@ -581,8 +540,6 @@ describe('listTopMerchants', () => {
         merchant: 'Acme',
         total: 10,
         transactionCount: 2,
-        selfTransferDebitTotal: 0,
-        selfTransferCount: 0,
       },
     ])
     expect(
@@ -595,7 +552,6 @@ describe('listTopMerchants', () => {
       undefined,
       '2026-04-01',
       '2026-04-15',
-      undefined,
       undefined,
       undefined,
       undefined,
@@ -618,7 +574,6 @@ describe('listTopMerchants', () => {
       undefined,
       '2026-03-01',
       '2026-04-30',
-      undefined,
       undefined,
       undefined,
       undefined,
