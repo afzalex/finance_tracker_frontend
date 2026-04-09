@@ -170,15 +170,15 @@ export default function EmailSourcePanel({
 
   const classificationLinkTo =
     enrichment?.classification_id != null
-      ? `/settings/rules/classifications/${enrichment.classification_id}?returnTo=${returnTo}`
+      ? `/settings/classifications/${enrichment.classification_id}?returnTo=${returnTo}`
       : null
 
   const parserLinkTo =
     enrichment?.parser_id != null
-      ? `/settings/rules/parsers/${enrichment.parser_id}?returnTo=${returnTo}`
+      ? `/settings/parsers/${enrichment.parser_id}?returnTo=${returnTo}`
       : null
 
-  const createParserLinkTo = `/settings/rules/parsers/new?returnTo=${returnTo}`
+  const createParserLinkTo = `/settings/parsers/new?returnTo=${returnTo}`
 
   const reprocessMailId =
     mailState.status === 'success' && mailState.data?.mail_id != null

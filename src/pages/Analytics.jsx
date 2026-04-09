@@ -84,11 +84,9 @@ export default function Analytics() {
     () => JSON.stringify({ months: analyticsMonths, ...apiRange }),
     [analyticsMonths, apiRange],
   )
-  const [includeSelfTransferMerchants, setIncludeSelfTransferMerchants] =
-    useState(false)
   const topMerchantsResourceKey = useMemo(
-    () => `${analyticsKey}:tmSelf:${includeSelfTransferMerchants}`,
-    [analyticsKey, includeSelfTransferMerchants],
+    () => `${analyticsKey}:tmSelf:false`,
+    [analyticsKey],
   )
   const setAnalyticsMonths = useCallback(
     (nextMonths) => {
@@ -118,7 +116,6 @@ export default function Analytics() {
         from: apiRange.from,
         to: apiRange.to,
         limit: 5,
-        includeSelfTransfer: includeSelfTransferMerchants,
       }),
   )
 
@@ -183,21 +180,6 @@ export default function Analytics() {
                 sx={{ mb: 0 }}
               >
                 <Typography variant="h6">Top merchants and counterparties</Typography>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      size="small"
-                      checked={includeSelfTransferMerchants}
-                      onChange={(_, c) => setIncludeSelfTransferMerchants(c)}
-                      inputProps={{
-                        'aria-label':
-                          'Include self-transfer transactions in top merchants',
-                      }}
-                    />
-                  }
-                  label="Include self-transfers"
-                  sx={{ m: 0, flexShrink: 0 }}
-                />
               </Stack>
               <Divider sx={layoutSectionDividerSx} />
               <Box sx={tableHorizontalScrollSx}>

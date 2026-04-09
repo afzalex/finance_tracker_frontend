@@ -6,6 +6,8 @@ import {
   emailsApi,
   metadataApi,
   transactionsApi,
+  appConfigApi,
+  mailAccountsApi,
 } from './apiConfig'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -249,6 +251,46 @@ export async function upsertAccount(payload) {
   }
 }
 
+/** GET /api/v1/mail-accounts */
+export async function listMailAccounts() {
+  try {
+    const res = await mailAccountsApi.listMailAccountsApiV1MailAccountsGet()
+    const data = res.data
+    if (Array.isArray(data)) return data
+    if (data && Array.isArray(data.items)) return data.items
+    return []
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
+}
+
+/** GET /api/v1/app-config */
+export async function getAppConfig(mailAccountId = 0) {
+  try {
+    const res = await appConfigApi.listAppConfigApiV1AppConfigGet(false, mailAccountId)
+    const data = res.data
+    if (Array.isArray(data)) return data
+    if (data && Array.isArray(data.items)) return data.items
+    return []
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
+}
+
+/** PATCH /api/v1/app-config/{key} */
+export async function updateAppConfig(key, value, mailAccountId = 0) {
+  try {
+    const res = await appConfigApi.updateAppConfigApiV1AppConfigKeyPatch(
+      key,
+      { value },
+      mailAccountId
+    )
+    return res.data
+  } catch (err) {
+    throw new Error(apiErrorMessage(err))
+  }
+}
+
 function normalizeYmd(value) {
   if (value == null) return undefined
   const s = String(value).trim()
@@ -343,28 +385,6 @@ export async function listTransactions({
   }
 }
 
-/**
- * PATCH /api/v1/transactions/{id} — only `is_self_transfer` is editable today.
- * @param {string|number} transactionId
- * @param {{ isSelfTransfer: boolean }} body
- * @returns {Promise<ReturnType<typeof mapTransactionRow>>}
- */
-export async function patchTransaction(transactionId, { isSelfTransfer }) {
-  const id = Number(transactionId)
-  if (!Number.isFinite(id) || id < 1) {
-    throw new Error('Invalid transaction id')
-  }
-  try {
-    const res =
-      await transactionsApi.patchTransactionApiV1TransactionsTransactionIdPatch(
-        id,
-        { is_self_transfer: !!isSelfTransfer },
-      )
-    return mapTransactionRow(res.data)
-  } catch (err) {
-    throw new Error(apiErrorMessage(err))
-  }
-}
 
 /**
  * Attempts to locate a transaction row by its numeric id by scanning pages.
@@ -511,21 +531,17 @@ const DEFAULT_TOP_MERCHANTS_LIMIT = 50
 /**
  * GET /api/v1/analytics/top-merchants — top payees by spend (merchant, else counterparty name, else `__UNDEFINED__`).
  * When `from` and `to` fall in the same calendar month, passes `month=YYYY-MM`; otherwise omits `month` (backend default window).
- * @param {{ from: string, to: string, limit?: number, includeSelfTransfer?: boolean }} opts
- *   `includeSelfTransfer` true → API does not filter out self-transfers; false/omitted → exclude rows with `is_self_transfer` true.
+ * @param {{ from: string, to: string, limit?: number }} opts
  * @returns {Promise<Array<{
  *   merchant: string,
  *   total: number,
  *   transactionCount: number,
- *   selfTransferDebitTotal: number,
- *   selfTransferCount: number,
  * }>>}
  */
 export async function listTopMerchants({
   from,
   to,
   limit = DEFAULT_TOP_MERCHANTS_LIMIT,
-  includeSelfTransfer = false,
 } = {}) {
   const fromP = normalizeYmd(from)
   const toP = normalizeYmd(to)
@@ -534,8 +550,6 @@ export async function listTopMerchants({
   }
   const month =
     fromP.slice(0, 7) === toP.slice(0, 7) ? fromP.slice(0, 7) : undefined
-  const includeSelfTransferParam =
-    includeSelfTransfer === true ? true : undefined
   try {
     const res = await analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet(
       month,
@@ -548,7 +562,6 @@ export async function listTopMerchants({
       undefined,
       undefined,
       undefined,
-      includeSelfTransferParam,
     )
     return (res.data ?? []).map((row) => {
       const m = row.merchant
@@ -558,8 +571,6 @@ export async function listTopMerchants({
         merchant,
         total: row.total ?? 0,
         transactionCount: row.transaction_count ?? 0,
-        selfTransferDebitTotal: row.self_transfer_debit_total ?? 0,
-        selfTransferCount: row.self_transfer_count ?? 0,
       }
     })
   } catch (err) {

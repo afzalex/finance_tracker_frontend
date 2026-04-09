@@ -7,6 +7,13 @@ import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../services/financeApi', () => ({
   reprocessAllEmailsOffline: vi.fn(),
+  listMailAccounts: vi.fn().mockResolvedValue([{ id: 1, provider: 'gmail', is_active: true }]),
+  getAppConfig: vi.fn().mockResolvedValue([
+    { key: 'app.mail.poll_seconds', value: '3600' },
+    { key: 'app.mail.initial_lookback_days', value: '7' },
+    { key: 'app.mail.gmail.labels', value: 'INBOX' },
+  ]),
+  updateAppConfig: vi.fn(),
 }))
 
 const sampleMeta = {

@@ -1,5 +1,6 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -9,7 +10,6 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
-  MenuItem,
   Portal,
   Snackbar,
   Stack,
@@ -25,7 +25,7 @@ import {
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { MessageType as ApiMessageType } from '../../api'
+import { styled } from '@mui/material/styles'
 import useDetailDialogSlotProps from '../../hooks/useDetailDialogSlotProps'
 import useResource from '../../hooks/useResource'
 import { dialogActionsCompactSx } from '../../utils/dialogActionsCompactSx'
@@ -37,70 +37,64 @@ import {
 import LoadingBlock from '../LoadingBlock'
 import SortableTableHeaderCell from '../SortableTableHeaderCell'
 import {
-  createClassification,
-  deactivateClassification,
-  listClassifications,
-  patchClassification,
+  createExclusionRule,
+  deactivateExclusionRule,
+  listExclusionRules,
+  listParsers,
+  patchExclusionRule,
 } from '../../services/rulesApi'
+import { listTransactionDistinctCatalog } from '../../services/financeApi'
 import { leaveReturnCopy, parseSafeReturnToParam } from '../../utils/safeReturnTo'
+
+const StackFormGrid = styled(Box)(({ theme }) => ({
+  display: 'grid',
+  gridTemplateColumns: '1fr',
+  gap: theme.spacing(2),
+  [theme.breakpoints.up('sm')]: {
+    gridTemplateColumns: '1fr 1fr',
+  },
+}))
 
 function nullableString(v) {
   const s = String(v ?? '').trim()
   return s === '' ? null : s
 }
 
-function toNullablePriority(v) {
-  const s = String(v ?? '').trim()
-  if (s === '') return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
-}
+const SORT_Q = 'ex_sort'
 
-/** Persisted in URL on the rules page (same pattern as transactions `sort`). */
-const CLS_SORT_Q = 'c_sort'
-
-const CLS_SORT_COL = {
+const SORT_COL = {
   id: 'id',
   name: 'name',
-  message_type: 'message_type',
-  priority: 'priority',
   mail_count: 'mail_count',
   status: 'status',
 }
 
-const CLS_SORT_FIELDS = Object.values(CLS_SORT_COL)
+const SORT_FIELDS = Object.values(SORT_COL)
 
-function parseClassificationsSortParam(sp) {
-  const raw = sp.get(CLS_SORT_Q)
-  const defaults = { sortBy: CLS_SORT_COL.id, sortDir: 'asc' }
+function parseSortParam(sp) {
+  const raw = sp.get(SORT_Q)
+  const defaults = { sortBy: SORT_COL.id, sortDir: 'asc' }
   if (!raw) return defaults
   const i = raw.lastIndexOf(':')
   if (i < 1) return defaults
   let by = raw.slice(0, i)
   const dir = raw.slice(i + 1)
-  if (by === 'updated_at') by = CLS_SORT_COL.mail_count
-  if (!CLS_SORT_FIELDS.includes(by)) return defaults
+  if (!SORT_FIELDS.includes(by)) return defaults
   if (dir !== 'asc' && dir !== 'desc') return defaults
   return { sortBy: by, sortDir: dir }
 }
 
-function isDefaultClassificationsSort(sortBy, sortDir) {
-  return sortBy === CLS_SORT_COL.id && sortDir === 'asc'
+function isDefaultSort(sortBy, sortDir) {
+  return sortBy === SORT_COL.id && sortDir === 'asc'
 }
 
-function defaultDirForClassificationsSortKey(key) {
-  if (
-    key === CLS_SORT_COL.mail_count ||
-    key === CLS_SORT_COL.priority
-  ) {
-    return 'desc'
-  }
+function defaultDirForSortKey(key) {
+  if (key === SORT_COL.mail_count) return 'desc'
   return 'asc'
 }
 
-export default function ClassificationsSection({
+export default function ExclusionRulesSection({
   showInactive,
-  searchQuery = '',
   routeId,
   routeCreate = false,
   onOpenRule,
@@ -119,42 +113,51 @@ export default function ClassificationsSection({
   const [errorSnack, setErrorSnack] = useState({ open: false, message: '' })
   const [snack, setSnack] = useState({ open: false, message: '' })
 
-  const resourceKey = `rules:classifications:${showInactive}:${refreshKey}`
+  const resourceKey = `rules:exclusions:${showInactive}:${refreshKey}`
   const { status, data, error } = useResource(resourceKey, () =>
-    listClassifications(),
+    listExclusionRules(),
   )
 
+  // Fetch parsers for the multiselect
+  const parsersResourceKey = `rules:parsers:all`
+  const { data: parsersData } = useResource(parsersResourceKey, () => listParsers())
+  const allParsers = useMemo(() => parsersData ?? [], [parsersData])
+
+  const catalogResourceKey = `finance:catalog:all`
+  const { data: catalogData } = useResource(catalogResourceKey, () => listTransactionDistinctCatalog())
+  const availablePayees = useMemo(() => {
+    if (!catalogData) return []
+    const set = new Set([...(catalogData.merchants ?? []), ...(catalogData.counterparties ?? [])])
+    // exclude the unnamed counterparty key
+    if (catalogData.unnamed_counterparty_key) {
+      set.delete(catalogData.unnamed_counterparty_key)
+    }
+    const arr = Array.from(set).filter(Boolean)
+    arr.sort((a, b) => a.localeCompare(b))
+    return arr
+  }, [catalogData])
+
   const { sortBy, sortDir } = useMemo(
-    () => parseClassificationsSortParam(searchParams),
+    () => parseSortParam(searchParams),
     [searchParams],
   )
 
-  const classifications = useMemo(() => {
-    let items = data ?? []
-    if (!showInactive) items = items.filter((c) => c.is_active)
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      items = items.filter((c) =>
-        String(c.name ?? '').toLowerCase().includes(q),
-      )
-    }
-    return items
-  }, [data, showInactive, searchQuery])
+  const rules = useMemo(() => {
+    const items = data ?? []
+    if (showInactive) return items
+    return items.filter((c) => c.is_active)
+  }, [data, showInactive])
 
-  const sortedClassifications = useMemo(() => {
+  const sortedRules = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
-    const copy = [...classifications]
+    const copy = [...rules]
     copy.sort((a, b) => {
-      if (sortBy === CLS_SORT_COL.id) return (a.id - b.id) * dir
-      if (sortBy === CLS_SORT_COL.name)
+      if (sortBy === SORT_COL.id) return (a.id - b.id) * dir
+      if (sortBy === SORT_COL.name)
         return String(a.name ?? '').localeCompare(String(b.name ?? '')) * dir
-      if (sortBy === CLS_SORT_COL.message_type)
-        return String(a.message_type ?? '').localeCompare(String(b.message_type ?? '')) * dir
-      if (sortBy === CLS_SORT_COL.priority)
-        return ((a.priority ?? 0) - (b.priority ?? 0)) * dir
-      if (sortBy === CLS_SORT_COL.mail_count)
+      if (sortBy === SORT_COL.mail_count)
         return ((a.mail_count ?? 0) - (b.mail_count ?? 0)) * dir
-      if (sortBy === CLS_SORT_COL.status) {
+      if (sortBy === SORT_COL.status) {
         const ra = a.is_active ? 0 : 1
         const rb = b.is_active ? 0 : 1
         return (ra - rb) * dir
@@ -162,24 +165,24 @@ export default function ClassificationsSection({
       return 0
     })
     return copy
-  }, [classifications, sortBy, sortDir])
+  }, [rules, sortBy, sortDir])
 
   const toggleSort = useCallback(
     (key) => {
       setSearchParams(
         (prev) => {
           const sp = new URLSearchParams(prev)
-          const cur = parseClassificationsSortParam(sp)
+          const cur = parseSortParam(sp)
           let nextBy = key
           let nextDir = cur.sortDir
           if (cur.sortBy === key) {
             nextDir = cur.sortDir === 'asc' ? 'desc' : 'asc'
           } else {
             nextBy = key
-            nextDir = defaultDirForClassificationsSortKey(key)
+            nextDir = defaultDirForSortKey(key)
           }
-          if (isDefaultClassificationsSort(nextBy, nextDir)) sp.delete(CLS_SORT_Q)
-          else sp.set(CLS_SORT_Q, `${nextBy}:${nextDir}`)
+          if (isDefaultSort(nextBy, nextDir)) sp.delete(SORT_Q)
+          else sp.set(SORT_Q, `${nextBy}:${nextDir}`)
           return sp
         },
         { replace: true },
@@ -196,16 +199,10 @@ export default function ClassificationsSection({
 
   const emptyForm = useMemo(
     () => ({
-      message_type: '',
       name: '',
-      priority: '',
       is_active: true,
-      subject_match_regex: '',
-      subject_extract_regex: '',
-      sender_match_regex: '',
-      body_match_regex: '',
-      body_extract_regex: '',
-      snippet_extract_regex: '',
+      payees: [],
+      parser_ids: [],
     }),
     [],
   )
@@ -227,7 +224,7 @@ export default function ClassificationsSection({
   })
 
   const handleLeaveReturnStay = () => {
-    const snack = leaveReturnDialog.staySnack
+    const snackT = leaveReturnDialog.staySnack
     setLeaveReturnDialog({
       open: false,
       path: null,
@@ -243,7 +240,7 @@ export default function ClassificationsSection({
       },
       { replace: true },
     )
-    if (snack) setSnack({ open: true, message: snack })
+    if (snackT) setSnack({ open: true, message: snackT })
   }
 
   const handleLeaveReturnContinue = () => {
@@ -259,7 +256,7 @@ export default function ClassificationsSection({
     if (path) navigate(path)
   }
 
-  const requestDismissClassificationDialog = () => {
+  const requestDismissDialog = () => {
     if (!safeReturnPath) {
       performCloseDialog()
       return
@@ -293,16 +290,10 @@ export default function ClassificationsSection({
   const openEdit = (rule, { syncUrl } = { syncUrl: true }) => {
     setMutationError(null)
     setForm({
-      message_type: rule.message_type ?? '',
       name: rule.name ?? '',
-      priority: rule.priority != null ? String(rule.priority) : '',
       is_active: Boolean(rule.is_active),
-      subject_match_regex: rule.subject_match_regex ?? '',
-      subject_extract_regex: rule.subject_extract_regex ?? '',
-      sender_match_regex: rule.sender_match_regex ?? '',
-      body_match_regex: rule.body_match_regex ?? '',
-      body_extract_regex: rule.body_extract_regex ?? '',
-      snippet_extract_regex: rule.snippet_extract_regex ?? '',
+      payees: Array.isArray(rule.payees) ? rule.payees : [],
+      parser_ids: Array.isArray(rule.parser_ids) ? rule.parser_ids : [],
     })
     setDialog({ open: true, mode: 'edit', rule })
     if (syncUrl) onOpenRule?.(rule.id)
@@ -310,15 +301,14 @@ export default function ClassificationsSection({
 
   useEffect(() => {
     if (routeId == null) return
-    const rule = classifications.find((c) => c.id === routeId)
+    const rule = rules.find((c) => c.id === routeId)
     if (!rule) return
     if (dialog.open && dialog.mode === 'edit' && dialog.rule?.id === routeId) return
     openEdit(rule, { syncUrl: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routeId, classifications])
+  }, [routeId, rules])
 
   useEffect(() => {
-    // If the URL no longer points at a specific classification, close the edit dialog.
     if (routeId != null) return
     if (!dialog.open || dialog.mode !== 'edit') return
     setDialog({ open: false, mode: 'create', rule: null })
@@ -334,40 +324,18 @@ export default function ClassificationsSection({
     setDeactivateState({ open: false, rule: null })
   }
 
-  const buildClassificationPayload = () => {
-    const payload = {
-      message_type: String(form.message_type ?? '').trim(),
+  const buildPayload = () => {
+    return {
       name: String(form.name ?? '').trim(),
       is_active: Boolean(form.is_active),
-      subject_match_regex: nullableString(form.subject_match_regex),
-      subject_extract_regex: nullableString(form.subject_extract_regex),
-      sender_match_regex: nullableString(form.sender_match_regex),
-      body_match_regex: nullableString(form.body_match_regex),
-      body_extract_regex: nullableString(form.body_extract_regex),
-      snippet_extract_regex: nullableString(form.snippet_extract_regex),
+      payees: (form.payees ?? []).map(p => String(p).trim()).filter(Boolean),
+      parser_ids: form.parser_ids ?? [],
     }
-
-    const priority = toNullablePriority(form.priority)
-    if (form.priority.trim() === '') {
-      // omit priority on create; patch can still clear via explicit delete
-      if (dialog.mode === 'edit') payload.priority = null
-    } else {
-      payload.priority = priority
-    }
-
-    return payload
   }
 
   const validateForm = () => {
-    const messageType = String(form.message_type ?? '').trim()
     const name = String(form.name ?? '').trim()
-    const prio = String(form.priority ?? '').trim()
-    if (!messageType) return 'Message Type is required.'
     if (!name) return 'Name is required.'
-    if (prio) {
-      const n = Number(prio)
-      if (!Number.isFinite(n) || n < 1 || n > 100) return 'Priority must be between 1 and 100.'
-    }
     return null
   }
 
@@ -395,12 +363,12 @@ export default function ClassificationsSection({
     setMutationError(null)
 
     try {
-      const payload = buildClassificationPayload()
+      const payload = buildPayload()
       const successMessage = dialog.mode === 'create' ? 'Created.' : 'Updated.'
       if (dialog.mode === 'create') {
-        await createClassification(payload)
+        await createExclusionRule(payload)
       } else {
-        await patchClassification(dialog.rule.id, payload)
+        await patchExclusionRule(dialog.rule.id, payload)
       }
       performCloseDialog()
       setRefreshKey((x) => x + 1)
@@ -430,7 +398,7 @@ export default function ClassificationsSection({
     setDeactivating(true)
     setMutationError(null)
     try {
-      await deactivateClassification(deactivateState.rule.id)
+      await deactivateExclusionRule(deactivateState.rule.id)
       closeDeactivate()
       const fromEdit = deactivateFromEdit
       if (fromEdit) {
@@ -466,71 +434,53 @@ export default function ClassificationsSection({
         <Box sx={tableHorizontalScrollSx}>
           <Table
             size="small"
-            aria-label="classifications table"
+            aria-label="exclusion rules table"
             sx={tableSmallScreenTextSx(theme)}
           >
             <TableHead>
               <TableRow>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === CLS_SORT_COL.id ? sortDir : false}
-                  active={sortBy === CLS_SORT_COL.id}
-                  direction={sortBy === CLS_SORT_COL.id ? sortDir : 'asc'}
-                  onSort={() => toggleSort(CLS_SORT_COL.id)}
+                  sortDirection={sortBy === SORT_COL.id ? sortDir : false}
+                  active={sortBy === SORT_COL.id}
+                  direction={sortBy === SORT_COL.id ? sortDir : 'asc'}
+                  onSort={() => toggleSort(SORT_COL.id)}
                 >
                   ID
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === CLS_SORT_COL.name ? sortDir : false}
-                  active={sortBy === CLS_SORT_COL.name}
-                  direction={sortBy === CLS_SORT_COL.name ? sortDir : 'asc'}
-                  onSort={() => toggleSort(CLS_SORT_COL.name)}
+                  sortDirection={sortBy === SORT_COL.name ? sortDir : false}
+                  active={sortBy === SORT_COL.name}
+                  direction={sortBy === SORT_COL.name ? sortDir : 'asc'}
+                  onSort={() => toggleSort(SORT_COL.name)}
                 >
                   Name
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
-                  sortDirection={sortBy === CLS_SORT_COL.message_type ? sortDir : false}
-                  active={sortBy === CLS_SORT_COL.message_type}
-                  direction={sortBy === CLS_SORT_COL.message_type ? sortDir : 'asc'}
-                  onSort={() => toggleSort(CLS_SORT_COL.message_type)}
-                >
-                  Message Type
-                </SortableTableHeaderCell>
-                <SortableTableHeaderCell
                   align="right"
-                  sortDirection={sortBy === CLS_SORT_COL.priority ? sortDir : false}
-                  active={sortBy === CLS_SORT_COL.priority}
-                  direction={sortBy === CLS_SORT_COL.priority ? sortDir : 'asc'}
-                  onSort={() => toggleSort(CLS_SORT_COL.priority)}
-                >
-                  Priority
-                </SortableTableHeaderCell>
-                <SortableTableHeaderCell
-                  align="right"
-                  sortDirection={sortBy === CLS_SORT_COL.mail_count ? sortDir : false}
-                  active={sortBy === CLS_SORT_COL.mail_count}
-                  direction={sortBy === CLS_SORT_COL.mail_count ? sortDir : 'asc'}
-                  onSort={() => toggleSort(CLS_SORT_COL.mail_count)}
+                  sortDirection={sortBy === SORT_COL.mail_count ? sortDir : false}
+                  active={sortBy === SORT_COL.mail_count}
+                  direction={sortBy === SORT_COL.mail_count ? sortDir : 'asc'}
+                  onSort={() => toggleSort(SORT_COL.mail_count)}
                 >
                   Mail Count
                 </SortableTableHeaderCell>
                 <SortableTableHeaderCell
                   align="right"
-                  sortDirection={sortBy === CLS_SORT_COL.status ? sortDir : false}
-                  active={sortBy === CLS_SORT_COL.status}
-                  direction={sortBy === CLS_SORT_COL.status ? sortDir : 'asc'}
-                  onSort={() => toggleSort(CLS_SORT_COL.status)}
+                  sortDirection={sortBy === SORT_COL.status ? sortDir : false}
+                  active={sortBy === SORT_COL.status}
+                  direction={sortBy === SORT_COL.status ? sortDir : 'asc'}
+                  onSort={() => toggleSort(SORT_COL.status)}
                 >
                   Status
                 </SortableTableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {sortedClassifications.map((c) => (
+              {sortedRules.map((c) => (
                 <TableRow
                   key={c.id}
                   hover
                   onClick={(e) => {
-                    // Avoid focus staying on a row while the app root is aria-hidden by the Dialog.
                     e.currentTarget.blur()
                     openEdit(c)
                   }}
@@ -543,7 +493,7 @@ export default function ClassificationsSection({
                   }}
                   tabIndex={0}
                   role="button"
-                  aria-label={`Edit classification ${c.name}`}
+                  aria-label={`Edit rule ${c.name}`}
                   sx={{ cursor: 'pointer' }}
                 >
                   <TableCell align="left" sx={{ whiteSpace: 'nowrap' }}>
@@ -554,8 +504,6 @@ export default function ClassificationsSection({
                       {c.name}
                     </Typography>
                   </TableCell>
-                  <TableCell align="left">{c.message_type}</TableCell>
-                  <TableCell align="right">{c.priority}</TableCell>
                   <TableCell align="right">
                     {c.mail_count != null ? c.mail_count : '—'}
                   </TableCell>
@@ -570,11 +518,11 @@ export default function ClassificationsSection({
                   </TableCell>
                 </TableRow>
               ))}
-              {classifications.length === 0 && (
+              {rules.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={4}>
                     <Typography variant="body2" color="text.secondary">
-                      No classifications found.
+                      No exclusion rules found.
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -586,7 +534,7 @@ export default function ClassificationsSection({
 
       <Dialog
         open={dialog.open}
-        onClose={() => requestDismissClassificationDialog()}
+        onClose={() => requestDismissDialog()}
         fullWidth
         maxWidth="md"
         slotProps={{
@@ -609,8 +557,8 @@ export default function ClassificationsSection({
         >
           <span>
             {dialog.mode === 'create'
-              ? 'Create classification'
-              : 'Edit classification'}
+              ? 'Create exclusion rule'
+              : 'Edit exclusion rule'}
           </span>
           <FormControlLabel
             control={
@@ -634,141 +582,91 @@ export default function ClassificationsSection({
             <StackFormGrid>
               <TextField
                 size="small"
-                label="Message Type"
-                value={form.message_type}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, message_type: e.target.value }))
-                }
-                required
-                fullWidth
-                select
-              >
-                {Object.values(ApiMessageType).map((v) => (
-                  <MenuItem key={v} value={v}>
-                    {v.replaceAll('_', ' ')}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                size="small"
                 label="Name"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required
                 fullWidth
               />
-              <TextField
-                size="small"
-                label="Priority"
-                value={form.priority}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, priority: e.target.value }))
-                }
-                fullWidth
-                type="number"
-                inputProps={{ min: 1, max: 100, step: 1, inputMode: 'numeric' }}
-              />
             </StackFormGrid>
 
             <Divider />
 
             <Typography variant="subtitle2" color="text.secondary">
-              Subject / Sender
+              Parsers
             </Typography>
-            <StackFormGrid>
-              <TextField
-                size="small"
-                label="Subject Match Regex"
-                value={form.subject_match_regex}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    subject_match_regex: e.target.value,
-                  }))
-                }
-                fullWidth
-                multiline
-                minRows={3}
-              />
-              <TextField
-                size="small"
-                label="Subject Extract Regex"
-                value={form.subject_extract_regex}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    subject_extract_regex: e.target.value,
-                  }))
-                }
-                fullWidth
-                multiline
-                minRows={3}
-              />
-              <TextField
-                size="small"
-                label="Sender Match Regex"
-                value={form.sender_match_regex}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    sender_match_regex: e.target.value,
-                  }))
-                }
-                fullWidth
-                multiline
-                minRows={3}
-                sx={{ gridColumn: { sm: '1 / -1' } }}
-              />
-            </StackFormGrid>
+            <Autocomplete
+              multiple
+              size="small"
+              options={allParsers}
+              getOptionLabel={(opt) => opt.name ?? `Parser ${opt.id}`}
+              value={allParsers.filter((p) => (form.parser_ids ?? []).includes(p.id))}
+              onChange={(_, newValue) =>
+                setForm((f) => ({
+                  ...f,
+                  parser_ids: newValue.map((v) => v.id),
+                }))
+              }
+              isOptionEqualToValue={(opt, val) => opt.id === val.id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Parsers"
+                  placeholder="Select parsers…"
+                />
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((opt, idx) => (
+                  <Chip
+                    {...getTagProps({ index: idx })}
+                    key={opt.id}
+                    size="small"
+                    label={opt.name ?? `Parser ${opt.id}`}
+                  />
+                ))
+              }
+            />
 
-            <Divider />
+            <Divider>
+              <Typography variant="overline" color="text.secondary">
+                OR
+              </Typography>
+            </Divider>
 
             <Typography variant="subtitle2" color="text.secondary">
-              Body / Snippet
+              Payees
             </Typography>
             <StackFormGrid>
-              <TextField
+              <Autocomplete
+                multiple
+                freeSolo
                 size="small"
-                label="Body Match Regex"
-                value={form.body_match_regex}
-                onChange={(e) =>
+                options={availablePayees}
+                value={form.payees ?? []}
+                onChange={(_, newValue) => {
                   setForm((f) => ({
                     ...f,
-                    body_match_regex: e.target.value,
+                    payees: newValue,
                   }))
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Matching Payees"
+                    placeholder="Select or type..."
+                    helperText="Creates exclusion if transaction counterparty or merchant matches any payee exactly (case-insensitive)."
+                  />
+                )}
+                renderTags={(value, getTagProps) =>
+                  value.map((opt, idx) => (
+                    <Chip
+                      {...getTagProps({ index: idx })}
+                      key={idx}
+                      size="small"
+                      label={opt}
+                    />
+                  ))
                 }
-                fullWidth
-                multiline
-                minRows={3}
-              />
-              <TextField
-                size="small"
-                value={form.snippet_extract_regex}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    snippet_extract_regex: e.target.value,
-                  }))
-                }
-                label="Snippet Extract Regex"
-                fullWidth
-                multiline
-                minRows={3}
-              />
-              <TextField
-                size="small"
-                label="Body Extract Regex"
-                value={form.body_extract_regex}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    body_extract_regex: e.target.value,
-                  }))
-                }
-                fullWidth
-                multiline
-                minRows={3}
-                sx={{ gridColumn: { sm: '1 / -1' } }}
               />
             </StackFormGrid>
           </Stack>
@@ -777,7 +675,7 @@ export default function ClassificationsSection({
         <DialogActions sx={dialogActionsCompactSx}>
           <Button
             size="small"
-            onClick={requestDismissClassificationDialog}
+            onClick={requestDismissDialog}
             disabled={saving}
             variant="outlined"
           >
@@ -806,54 +704,39 @@ export default function ClassificationsSection({
             severity="error"
             variant="filled"
             onClose={() => setErrorSnack({ open: false, message: '' })}
-            sx={{ alignItems: 'center' }}
           >
             {errorSnack.message}
           </Alert>
         </Snackbar>
       </Dialog>
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={3000}
+        onClose={() => setSnack({ open: false, message: '' })}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setSnack({ open: false, message: '' })}
+        >
+          {snack.message}
+        </Alert>
+      </Snackbar>
 
       <Dialog
-        open={leaveReturnDialog.open}
-        onClose={handleLeaveReturnStay}
-        maxWidth="sm"
+        open={deactivateState.open}
+        onClose={closeDeactivate}
+        maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>
-          {leaveReturnDialog.path && leaveReturnDialog.variant
-            ? leaveReturnCopy(leaveReturnDialog.path, leaveReturnDialog.variant).title
-            : ''}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary">
-            {leaveReturnDialog.path && leaveReturnDialog.variant
-              ? leaveReturnCopy(leaveReturnDialog.path, leaveReturnDialog.variant).body
-              : ''}
-          </Typography>
+        <DialogTitle>Deactivate Rule?</DialogTitle>
+        <DialogContent>
+          Are you sure you want to continuously bypass exclusion for `{deactivateState.rule?.name}`?
         </DialogContent>
-        <DialogActions sx={dialogActionsCompactSx}>
-          <Button size="small" onClick={handleLeaveReturnStay}>
-            Stay here
-          </Button>
-          <Button size="small" variant="contained" onClick={handleLeaveReturnContinue}>
-            Continue
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={deactivateState.open} onClose={closeDeactivate} maxWidth="sm" fullWidth>
-        <DialogTitle>Deactivate classification?</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary">
-            This will set <code>is_active</code> to false for this rule. Rows are kept in
-            the database.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={dialogActionsCompactSx}>
-          <Button size="small" variant="outlined" onClick={closeDeactivate} disabled={deactivating}>
+        <DialogActions sx={{ mb: 1, px: 2, display: 'flex', gap: 1 }}>
+          <Button size="small" onClick={closeDeactivate} disabled={deactivating}>
             Cancel
           </Button>
-          <Box sx={{ flexGrow: 1 }} />
           <Button
             size="small"
             variant="contained"
@@ -867,37 +750,57 @@ export default function ClassificationsSection({
       </Dialog>
 
       <Portal>
-        <Snackbar
-          open={snack.open}
-          autoHideDuration={3000}
-          onClose={() => setSnack({ open: false, message: '' })}
-          message={snack.message}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          sx={{
-            position: 'fixed',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            bottom: 16,
-            zIndex: (theme) => theme.zIndex.snackbar,
+        <Dialog
+          open={leaveReturnDialog.open}
+          onClose={() => {
+            setLeaveReturnDialog({
+              open: false,
+              path: null,
+              variant: null,
+              staySnack: null,
+            })
           }}
-        />
+          maxWidth="xs"
+          fullWidth
+          slotProps={{
+            backdrop: {
+              sx: { zIndex: (theme) => theme.zIndex.modal + 2 },
+            },
+          }}
+          sx={{ zIndex: (theme) => theme.zIndex.modal + 3 }}
+        >
+          <DialogTitle>Wait, return to caller?</DialogTitle>
+          <DialogContent>
+            {leaveReturnDialog.variant === 'dismiss' ? (
+              <Typography variant="body2">
+                This dialog was opened from <strong>Unparsed Emails</strong>.{' '}
+                We can return there, or you can stay here on the Classifications
+                table.
+              </Typography>
+            ) : (
+              <Typography variant="body2">
+                {leaveReturnCopy[leaveReturnDialog.variant] ?? 'Changes saved! '}
+                You can return to where you were, or stay here.
+              </Typography>
+            )}
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Returning to: {leaveReturnDialog.path}
+            </Alert>
+          </DialogContent>
+          <DialogActions sx={{ mb: 1, px: 2, display: 'flex', gap: 1 }}>
+            <Button size="small" onClick={handleLeaveReturnStay}>
+              Stay Here
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={handleLeaveReturnContinue}
+            >
+              Return
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Portal>
-
     </>
   )
 }
-
-function StackFormGrid({ children }) {
-  return (
-    <Box
-      sx={{
-        display: 'grid',
-        gap: layoutSectionSpacing,
-        gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-      }}
-    >
-      {children}
-    </Box>
-  )
-}
-

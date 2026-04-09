@@ -9,24 +9,10 @@ import Transactions from './pages/Transactions'
 import Accounts from './pages/Accounts'
 import Analytics from './pages/Analytics'
 import Settings from './pages/Settings'
-import RulesPage from './pages/RulesPage'
 import UnparsedEmails from './pages/UnparsedEmails'
 import GmailOauthCallback from './pages/GmailOauthCallback'
 import NotFound from './pages/NotFound'
 
-/** `/settings/rules` → `/settings/rules/classifications` or `…/parsers` (honours legacy `?tab=`). */
-function SettingsRulesRedirect() {
-  const [searchParams] = useSearchParams()
-  const tab = String(searchParams.get('tab') ?? '').toLowerCase()
-  const base =
-    tab === 'parsers'
-      ? '/settings/rules/parsers'
-      : '/settings/rules/classifications'
-  const sp = new URLSearchParams(searchParams)
-  sp.delete('tab')
-  const qs = sp.toString()
-  return <Navigate to={qs ? `${base}?${qs}` : base} replace />
-}
 
 function App() {
   return (
@@ -46,21 +32,16 @@ function App() {
               <Route path="analytics" element={<Analytics />} />
               <Route path="emails/unparsed" element={<UnparsedEmails />} />
               <Route path="emails/unparsed/:mailId" element={<UnparsedEmails />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="settings/rules" element={<SettingsRulesRedirect />} />
-              <Route
-                path="settings/rules/classifications"
-                element={<RulesPage />}
-              />
-              <Route
-                path="settings/rules/classifications/:classificationId"
-                element={<RulesPage />}
-              />
-              <Route path="settings/rules/parsers" element={<RulesPage />} />
-              <Route
-                path="settings/rules/parsers/:parserId"
-                element={<RulesPage />}
-              />
+              <Route path="settings" element={<Navigate to="/settings/classifications" replace />} />
+              <Route path="settings/rules" element={<Navigate to="/settings/classifications" replace />} />
+              <Route path="settings/classifications" element={<Settings />} />
+              <Route path="settings/classifications/:classificationId" element={<Settings />} />
+              <Route path="settings/parsers" element={<Settings />} />
+              <Route path="settings/parsers/:parserId" element={<Settings />} />
+              <Route path="settings/exclusions" element={<Settings />} />
+              <Route path="settings/exclusions/:exclusionRuleId" element={<Settings />} />
+              <Route path="settings/app-config" element={<Navigate to="/settings/system" replace />} />
+              <Route path="settings/system" element={<Settings />} />
             </Route>
           </Route>
 

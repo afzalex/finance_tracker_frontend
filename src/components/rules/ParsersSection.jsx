@@ -102,6 +102,7 @@ function defaultDirForParsersSortKey(key) {
 
 export default function ParsersSection({
   showInactive,
+  searchQuery = '',
   routeId,
   routeCreate = false,
   onOpenRule,
@@ -129,10 +130,17 @@ export default function ParsersSection({
   )
 
   const parsers = useMemo(() => {
-    const items = data ?? []
-    if (showInactive) return items
-    return items.filter((p) => p.is_active)
-  }, [data, showInactive])
+    let items = data ?? []
+    if (!showInactive) items = items.filter((p) => p.is_active)
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      items = items.filter((p) =>
+        String(p.label ?? '').toLowerCase().includes(q) ||
+        String(p.name ?? '').toLowerCase().includes(q),
+      )
+    }
+    return items
+  }, [data, showInactive, searchQuery])
 
   const sortedParsers = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
@@ -207,7 +215,6 @@ export default function ParsersSection({
       txn_date_fmt: '',
       txn_time_fmt: '',
       default_category: '',
-      is_self_transfer: false,
       default_account_id: '',
     }),
     [],
@@ -314,7 +321,6 @@ export default function ParsersSection({
       txn_date_fmt: rule.txn_date_fmt ?? '',
       txn_time_fmt: rule.txn_time_fmt ?? '',
       default_category: rule.default_category ?? '',
-      is_self_transfer: Boolean(rule.is_self_transfer),
       default_account_id: rule.default_account_id ?? '',
     })
     setDialog({ open: true, mode: 'edit', rule })
@@ -367,7 +373,6 @@ export default function ParsersSection({
       txn_time_fmt: nullableString(form.txn_time_fmt),
       default_category: nullableString(form.default_category),
       default_account_id: nullableString(form.default_account_id),
-      is_self_transfer: Boolean(form.is_self_transfer),
     }
 
     const priority = toNullableNumber(form.priority)
@@ -535,13 +540,6 @@ export default function ParsersSection({
                 >
                   Mail Count
                 </SortableTableHeaderCell>
-                <TableCell align="left" sx={hideParserDefaultColsSx}>
-                  Default Category
-                </TableCell>
-                <TableCell align="center">Self Transfer</TableCell>
-                <TableCell align="left" sx={hideParserDefaultColsSx}>
-                  Default Account ID
-                </TableCell>
                 <SortableTableHeaderCell
                   align="right"
                   sortDirection={sortBy === PRC_SORT_COL.status ? sortDir : false}
@@ -592,34 +590,6 @@ export default function ParsersSection({
                   <TableCell align="right">
                     {p.mail_count != null ? p.mail_count : '—'}
                   </TableCell>
-                  <TableCell align="left" sx={{ maxWidth: 160, ...hideParserDefaultColsSx }}>
-                    <Typography variant="body2" noWrap title={p.default_category ?? ''}>
-                      {p.default_category?.trim() ? p.default_category : '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="center">
-                    {p.is_self_transfer === true ? (
-                      <Chip size="small" label="Yes" sx={{ userSelect: 'none' }} />
-                    ) : p.is_self_transfer === false ? (
-                      <Chip
-                        size="small"
-                        label="No"
-                        variant="outlined"
-                        sx={{ userSelect: 'none' }}
-                      />
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
-                  <TableCell align="left" sx={{ maxWidth: 200, ...hideParserDefaultColsSx }}>
-                    <Typography
-                      variant="body2"
-                      noWrap
-                      title={p.default_account_id ?? ''}
-                    >
-                      {p.default_account_id?.trim() ? p.default_account_id : '—'}
-                    </Typography>
-                  </TableCell>
                   <TableCell align="right">
                     <Chip
                       size="small"
@@ -634,7 +604,7 @@ export default function ParsersSection({
 
               {parsers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9}>
+                  <TableCell colSpan={6}>
                     <Typography variant="body2" color="text.secondary">
                       No parsers found.
                     </Typography>
@@ -716,22 +686,6 @@ export default function ParsersSection({
                 fullWidth
                 type="number"
                 inputProps={{ min: 1, max: 100, step: 1, inputMode: 'numeric' }}
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={form.is_self_transfer}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        is_self_transfer: e.target.checked,
-                      }))
-                    }
-                  />
-                }
-                label="Self transfer"
-                sx={{ m: 0, userSelect: 'none', alignSelf: 'center' }}
               />
             </StackFormGrid>
 

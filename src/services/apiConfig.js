@@ -8,6 +8,9 @@ import {
   MetadataApi,
   ParsersApi,
   TransactionsApi,
+  AppConfigApi,
+  MailAccountsApi,
+  ExclusionRulesApi,
 } from '../api'
 
 // In production (Docker) the SPA is served by the same server as the API,
@@ -28,3 +31,6 @@ export const metadataApi = new MetadataApi(configuration)
 export const adminApi = new AdminApi(configuration)
 export const classificationsApi = new ClassificationsApi(configuration)
 export const parsersApi = new ParsersApi(configuration)
+export const appConfigApi = new AppConfigApi(configuration)
+export const mailAccountsApi = new MailAccountsApi(configuration)
+export const exclusionRulesApi = new ExclusionRulesApi(configuration)
