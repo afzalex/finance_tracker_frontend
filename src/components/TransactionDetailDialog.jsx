@@ -78,8 +78,6 @@ export default function TransactionDetailDialog({
   onNotify,
   /** After successful email reprocess: refresh lists, then dialog calls `onClose`. */
   onReprocessComplete,
-  /** Called with the mapped row after update succeeds. */
-  onRowUpdate,
 }) {
   const tx = row?.raw
   const signed = tx

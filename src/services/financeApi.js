@@ -3,6 +3,7 @@ import {
   accountsApi,
   adminApi,
   analyticsApi,
+  apiBasePath,
   emailsApi,
   metadataApi,
   transactionsApi,
@@ -27,6 +28,97 @@ export function apiErrorMessage(error) {
 export async function getAppMetadata() {
   const res = await metadataApi.getMetadataApiV1MetaGet()
   return res.data
+}
+
+/**
+ * POST /api/v1/emails/match-preview — scan cached mail for regex matches.
+ * With `mail_id`, response includes `matched` for that row; without it, returns up to `limit` hits.
+ * Batch `items[]` may include full mail body as `body_text` (or `body`) when the API provides it for extract preview.
+ *
+ * @param {Record<string, unknown>} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function postEmailMatchPreview(payload, opts = {}) {
+  const base = (apiBasePath || '').replace(/\/+$/, '')
+  const abs = base ? `${base}/api/v1/emails/match-preview` : `/api/v1/emails/match-preview`
+  const res = await fetch(abs, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+    signal: opts.signal,
+  })
+  const text = await res.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
+  if (!res.ok) {
+    const detail = data?.detail
+    let msg
+    if (typeof detail === 'string') msg = detail
+    else if (Array.isArray(detail)) {
+      msg = detail.map((d) => d?.msg ?? d).filter(Boolean).join(', ')
+    } else {
+      msg = text || res.statusText || `HTTP ${res.status}`
+    }
+    const err = new Error(msg)
+    err.status = res.status
+    err.response = { data }
+    throw err
+  }
+  return data
+}
+
+/**
+ * POST /api/v1/emails/extract-regex-preview — first-match spans for extract regexes on one cached mail.
+ *
+ * @param {{
+ *   mail_id: string,
+ *   subject_extract_regex?: string,
+ *   body_extract_regex?: string,
+ *   snippet_extract_regex?: string,
+ * }} payload
+ * @param {{ signal?: AbortSignal }} [opts]
+ */
+export async function postEmailExtractRegexPreview(payload, opts = {}) {
+  const base = (apiBasePath || '').replace(/\/+$/, '')
+  const abs = base
+    ? `${base}/api/v1/emails/extract-regex-preview`
+    : `/api/v1/emails/extract-regex-preview`
+  const res = await fetch(abs, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+    signal: opts.signal,
+  })
+  const text = await res.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
+  if (!res.ok) {
+    const detail = data?.detail
+    let msg
+    if (typeof detail === 'string') msg = detail
+    else if (Array.isArray(detail)) {
+      msg = detail.map((d) => d?.msg ?? d).filter(Boolean).join(', ')
+    } else {
+      msg = text || res.statusText || `HTTP ${res.status}`
+    }
+    const err = new Error(msg)
+    err.status = res.status
+    err.response = { data }
+    throw err
+  }
+  return data
 }
 
 /**

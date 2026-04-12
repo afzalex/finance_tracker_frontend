@@ -871,7 +871,6 @@ export default function Transactions() {
         }}
         onNotify={(message) => setSnack({ open: true, message })}
         onReprocessComplete={() => setListRefreshKey((k) => k + 1)}
-        onRowUpdate={(updated) => setSelectedRow(updated)}
       />
 
       <Portal>

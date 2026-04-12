@@ -3,15 +3,18 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Portal,
   Snackbar,
+  Skeleton,
   Stack,
   Switch,
   Table,
@@ -20,11 +23,13 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { RefreshCw } from 'lucide-react'
 import { MessageType as ApiMessageType } from '../../api'
 import useDetailDialogSlotProps from '../../hooks/useDetailDialogSlotProps'
 import useResource from '../../hooks/useResource'
@@ -42,6 +47,12 @@ import {
   listClassifications,
   patchClassification,
 } from '../../services/rulesApi'
+import {
+  MATCH_PREVIEW_FALLBACK_WINDOW,
+  MATCH_PREVIEW_LIMIT,
+  matcherMailPreviewTriggerSx,
+  useRuleMatcherPreview,
+} from '../../hooks/useRuleMatcherPreview'
 import { leaveReturnCopy, parseSafeReturnToParam } from '../../utils/safeReturnTo'
 
 function nullableString(v) {
@@ -212,6 +223,22 @@ export default function ClassificationsSection({
 
   const [form, setForm] = useState(emptyForm)
 
+  const {
+    hasContextMail,
+    previewEnabled,
+    setPreviewEnabled,
+    previewState,
+    setPreviewState,
+    fetchMatchingMailsPreview,
+    matchPreviewAbortRef,
+    contextMailMatch,
+  } = useRuleMatcherPreview({
+    dialogOpen: dialog.open,
+    subjectMatch: form.subject_match_regex,
+    senderMatch: form.sender_match_regex,
+    bodyMatch: form.body_match_regex,
+  })
+
   const performCloseDialog = () => {
     const wasEdit = dialog.mode === 'edit'
     const wasCreateFromRoute = dialog.mode === 'create' && routeCreate
@@ -228,6 +255,7 @@ export default function ClassificationsSection({
 
   const handleLeaveReturnStay = () => {
     const snack = leaveReturnDialog.staySnack
+    const variant = leaveReturnDialog.variant
     setLeaveReturnDialog({
       open: false,
       path: null,
@@ -243,6 +271,7 @@ export default function ClassificationsSection({
       },
       { replace: true },
     )
+    if (variant === 'dismiss') performCloseDialog()
     if (snack) setSnack({ open: true, message: snack })
   }
 
@@ -672,9 +701,114 @@ export default function ClassificationsSection({
 
             <Divider />
 
-            <Typography variant="subtitle2" color="text.secondary">
-              Matcher
-            </Typography>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              flexWrap="wrap"
+              gap={1}
+              sx={{ mb: 0.5 }}
+            >
+              <Typography variant="subtitle2" color="text.secondary">
+                Matcher
+              </Typography>
+              {hasContextMail ? (
+                <Box sx={{ flexShrink: 0 }}>
+                  {(() => {
+                    const m = contextMailMatch
+                    const chipTooltip =
+                      m.status === 'loading'
+                        ? ''
+                        : m.status === 'error'
+                          ? m.error ?? ''
+                          : m.notInCache
+                            ? 'Not in local mail cache yet (run ingest first).'
+                            : m.matched === null && m.status === 'ready'
+                              ? 'Add a subject, sender, or body matcher to compare.'
+                              : m.matched === true || m.matched === false
+                                ? m.mailSubject
+                                  ? `Subject: ${m.mailSubject}`
+                                  : 'Subject: (empty)'
+                                : ''
+                    const face = (label, { startIcon = null } = {}) => (
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        size="small"
+                        tabIndex={-1}
+                        disableRipple
+                        onClick={(e) => e.stopPropagation()}
+                        startIcon={startIcon}
+                        sx={matcherMailPreviewTriggerSx}
+                      >
+                        {label}
+                      </Button>
+                    )
+                    const chip =
+                      m.status === 'loading' ? (
+                        face('Checking…', {
+                          startIcon: <CircularProgress size={12} color="inherit" />,
+                        })
+                      ) : m.status === 'error' ? (
+                        face('Could not verify')
+                      ) : m.notInCache ? (
+                        face('Not in mail cache')
+                      ) : m.matched === null ? (
+                        face('Add matchers to compare')
+                      ) : m.matched ? (
+                        face('Matched')
+                      ) : (
+                        face('Not matched')
+                      )
+                    return (
+                      <Tooltip
+                        title={chipTooltip}
+                        placement="top-end"
+                        disableHoverListener={!chipTooltip}
+                        slotProps={{
+                          popper: {
+                            disablePortal: true,
+                          },
+                          tooltip: {
+                            sx: {
+                              maxWidth: 'min(22rem, calc(100vw - 32px))',
+                              textAlign: 'right',
+                            },
+                          },
+                        }}
+                      >
+                        <Box component="span" sx={{ display: 'inline-block' }}>
+                          {chip}
+                        </Box>
+                      </Tooltip>
+                    )
+                  })()}
+                </Box>
+              ) : (
+                <Box sx={{ flexShrink: 0 }}>
+                  <Button
+                    type="button"
+                    variant="outlined"
+                    size="small"
+                    sx={matcherMailPreviewTriggerSx}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (previewEnabled) {
+                        matchPreviewAbortRef.current?.abort()
+                        matchPreviewAbortRef.current = null
+                        setPreviewEnabled(false)
+                        setPreviewState({ status: 'idle', data: null, error: null })
+                      } else {
+                        setPreviewEnabled(true)
+                        void fetchMatchingMailsPreview()
+                      }
+                    }}
+                  >
+                    {previewEnabled ? 'Hide Matching Mails' : 'Show Matching Mails'}
+                  </Button>
+                </Box>
+              )}
+            </Stack>
             <StackFormGrid>
               <TextField
                 size="small"
@@ -720,6 +854,115 @@ export default function ClassificationsSection({
                 sx={{ gridColumn: { sm: '1 / -1' } }}
               />
             </StackFormGrid>
+
+            {!hasContextMail && previewEnabled ? (
+            <Box
+              sx={{
+                // Match MUI outlined TextField border + radius
+                border: (t) =>
+                  `1px solid ${
+                    t.palette.mode === 'light'
+                      ? 'rgba(0, 0, 0, 0.23)'
+                      : 'rgba(255, 255, 255, 0.23)'
+                  }`,
+                borderRadius: 0.5,
+                p: 1.5,
+                bgcolor: 'transparent',
+              }}
+            >
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+                justifyContent="space-between"
+                gap={1}
+                sx={{ mb: 1 }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                    Matching Mails
+                  </Typography>
+                </Box>
+
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="flex-end"
+                  gap={0.75}
+                  sx={{ flexShrink: 0, minWidth: 0, textAlign: 'right' }}
+                >
+                  {previewState.status !== 'idle' ? (
+                    <Tooltip title="Refresh matching mails" placement="top">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            void fetchMatchingMailsPreview()
+                          }}
+                          disabled={previewState.status === 'loading'}
+                          aria-label="Refresh matching mails"
+                        >
+                          <RefreshCw size={18} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  ) : null}
+                  {previewState.status !== 'idle' ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        textAlign: { xs: 'left', sm: 'right' },
+                        maxWidth: { xs: '100%', sm: 360 },
+                      }}
+                    >
+                      Showing up to <b>{MATCH_PREVIEW_LIMIT}</b> matches (
+                      {previewState.data?.windowLabel ?? MATCH_PREVIEW_FALLBACK_WINDOW})
+                    </Typography>
+                  ) : null}
+                </Stack>
+              </Stack>
+
+              <Divider sx={{ mb: 1.25 }} />
+
+              {previewState.status === 'idle' ? null : previewState.status === 'loading' ? (
+                <Stack divider={<Divider flexItem />} spacing={0}>
+                  {Array.from({ length: MATCH_PREVIEW_LIMIT }, (_, idx) => (
+                    <Box key={idx} sx={{ py: 1.25 }}>
+                      <Skeleton variant="text" animation="wave" width="82%" height={22} />
+                      <Skeleton variant="text" animation="wave" width="46%" height={16} sx={{ mt: 0.25 }} />
+                      <Skeleton variant="text" animation="wave" width="100%" height={18} sx={{ mt: 1 }} />
+                      <Skeleton variant="text" animation="wave" width="91%" height={18} sx={{ mt: 0.5 }} />
+                    </Box>
+                  ))}
+                </Stack>
+              ) : previewState.status === 'error' ? (
+                <Typography variant="body2" color="warning.main">
+                  {previewState.error ?? 'Preview failed.'}
+                </Typography>
+              ) : previewState.status === 'empty' ? (
+                <Typography variant="body2" color="text.secondary">
+                  No mails matched these rules (
+                  {previewState.data?.windowLabel ?? MATCH_PREVIEW_FALLBACK_WINDOW}).
+                </Typography>
+              ) : (
+                <Stack divider={<Divider flexItem />} spacing={0}>
+                  {(previewState.data?.items ?? []).slice(0, MATCH_PREVIEW_LIMIT).map((m, idx) => (
+                    <Box key={`${m.mail_id}:${m.when}:${idx}`} sx={{ py: 1.25 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {m.subject}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                        {m.sender} • {m.when}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {m.snippet}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+            ) : null}
 
             <Divider />
 
@@ -833,7 +1076,7 @@ export default function ClassificationsSection({
         </DialogContent>
         <DialogActions sx={dialogActionsCompactSx}>
           <Button size="small" onClick={handleLeaveReturnStay}>
-            Stay here
+            Stay Here
           </Button>
           <Button size="small" variant="contained" onClick={handleLeaveReturnContinue}>
             Continue

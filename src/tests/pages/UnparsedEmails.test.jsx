@@ -155,14 +155,19 @@ describe('UnparsedEmails', () => {
       expect(vi.mocked(getUnparsedEmailDetail)).toHaveBeenCalledWith(2)
     })
 
-    const expectedReturn = encodeURIComponent('/emails/unparsed/2')
+    const clsQs = new URLSearchParams()
+    clsQs.set('returnTo', '/emails/unparsed/2')
+    clsQs.set('context_mail_id', 'm2')
     expect(screen.getByRole('link', { name: 'transaction' })).toHaveAttribute(
       'href',
-      `/settings/classifications/12?returnTo=${expectedReturn}`,
+      `/settings/classifications/12?${clsQs.toString()}`,
     )
+    const parserQs = new URLSearchParams()
+    parserQs.set('returnTo', '/emails/unparsed/2')
+    parserQs.set('context_mail_id', 'm2')
     expect(screen.getByRole('link', { name: 'default' })).toHaveAttribute(
       'href',
-      `/settings/parsers/34?returnTo=${expectedReturn}`,
+      `/settings/parsers/34?${parserQs.toString()}`,
     )
 
     await user.click(screen.getByRole('button', { name: /^Reprocess$/ }))

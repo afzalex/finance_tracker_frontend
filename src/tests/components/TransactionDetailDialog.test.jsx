@@ -214,12 +214,18 @@ describe('TransactionDetailDialog', () => {
       expect(screen.getByText('transaction')).toBeInTheDocument()
     })
     expect(screen.getByText('default')).toBeInTheDocument()
-    const expectedTo = `/settings/classifications/12?returnTo=${encodeURIComponent(fromPath)}`
+    const clsQs = new URLSearchParams()
+    clsQs.set('returnTo', fromPath)
+    clsQs.set('context_mail_id', 'gmail-msg-abc')
+    const expectedTo = `/settings/classifications/12?${clsQs.toString()}`
     expect(screen.getByRole('link', { name: 'transaction' })).toHaveAttribute(
       'href',
       expectedTo,
     )
-    const expectedParserTo = `/settings/parsers/34?returnTo=${encodeURIComponent(fromPath)}`
+    const parserQs = new URLSearchParams()
+    parserQs.set('returnTo', fromPath)
+    parserQs.set('context_mail_id', 'gmail-msg-abc')
+    const expectedParserTo = `/settings/parsers/34?${parserQs.toString()}`
     expect(screen.getByRole('link', { name: 'default' })).toHaveAttribute(
       'href',
       expectedParserTo,
@@ -257,7 +263,10 @@ describe('TransactionDetailDialog', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Create parser' })).toBeInTheDocument()
     })
-    const expectedCreateParserTo = `/settings/parsers/new?returnTo=${encodeURIComponent(fromPath)}`
+    const createParserQs = new URLSearchParams()
+    createParserQs.set('returnTo', fromPath)
+    createParserQs.set('context_mail_id', 'gmail-msg-abc')
+    const expectedCreateParserTo = `/settings/parsers/new?${createParserQs.toString()}`
     expect(screen.getByRole('link', { name: 'Create parser' })).toHaveAttribute(
       'href',
       expectedCreateParserTo,

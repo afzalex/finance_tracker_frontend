@@ -119,10 +119,6 @@ export default function EmailSourcePanel({
   )
 
   const location = useLocation()
-  const returnTo = useMemo(
-    () => encodeURIComponent(`${location.pathname}${location.search}`),
-    [location.pathname, location.search],
-  )
 
   useEffect(() => {
     if (!active) return
@@ -168,17 +164,54 @@ export default function EmailSourcePanel({
   const mail = mailState.data
   const enrichment = mail?.enrichment
 
-  const classificationLinkTo =
-    enrichment?.classification_id != null
-      ? `/settings/classifications/${enrichment.classification_id}?returnTo=${returnTo}`
-      : null
+  const classificationLinkTo = useMemo(() => {
+    if (enrichment?.classification_id == null) return null
+    const qs = new URLSearchParams()
+    qs.set('returnTo', `${location.pathname}${location.search}`)
+    const ctxMail =
+      mailState.status === 'success' && mail?.mail_id != null
+        ? String(mail.mail_id).trim()
+        : String(mailId ?? '').trim()
+    if (ctxMail) qs.set('context_mail_id', ctxMail)
+    return `/settings/classifications/${enrichment.classification_id}?${qs.toString()}`
+  }, [
+    enrichment?.classification_id,
+    location.pathname,
+    location.search,
+    mail?.mail_id,
+    mailId,
+    mailState.status,
+  ])
 
-  const parserLinkTo =
-    enrichment?.parser_id != null
-      ? `/settings/parsers/${enrichment.parser_id}?returnTo=${returnTo}`
-      : null
+  const parserLinkTo = useMemo(() => {
+    if (enrichment?.parser_id == null) return null
+    const qs = new URLSearchParams()
+    qs.set('returnTo', `${location.pathname}${location.search}`)
+    const ctxMail =
+      mailState.status === 'success' && mail?.mail_id != null
+        ? String(mail.mail_id).trim()
+        : String(mailId ?? '').trim()
+    if (ctxMail) qs.set('context_mail_id', ctxMail)
+    return `/settings/parsers/${enrichment.parser_id}?${qs.toString()}`
+  }, [
+    enrichment?.parser_id,
+    location.pathname,
+    location.search,
+    mail?.mail_id,
+    mailId,
+    mailState.status,
+  ])
 
-  const createParserLinkTo = `/settings/parsers/new?returnTo=${returnTo}`
+  const createParserLinkTo = useMemo(() => {
+    const qs = new URLSearchParams()
+    qs.set('returnTo', `${location.pathname}${location.search}`)
+    const ctxMail =
+      mailState.status === 'success' && mail?.mail_id != null
+        ? String(mail.mail_id).trim()
+        : String(mailId ?? '').trim()
+    if (ctxMail) qs.set('context_mail_id', ctxMail)
+    return `/settings/parsers/new?${qs.toString()}`
+  }, [location.pathname, location.search, mail?.mail_id, mailId, mailState.status])
 
   const reprocessMailId =
     mailState.status === 'success' && mailState.data?.mail_id != null

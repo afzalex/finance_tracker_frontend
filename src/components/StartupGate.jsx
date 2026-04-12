@@ -42,9 +42,12 @@ function FullPageMessage({ title, children, actions }) {
 }
 
 function oauthRedirectUri() {
-  // Use a frontend callback route (not `/api/*`), because in production `/api/*` is
-  // reserved for the backend reverse proxy (Nginx) and in dev Vite has no proxy.
-  return `${window.location.origin}/oauth/gmail/callback`
+  // For Web OAuth, Google must redirect to a URI that is registered on the OAuth client.
+  // We use the backend callback endpoint so the backend can exchange the code and persist tokens.
+  // In dev, `apiBasePath` should be `http://localhost:8000` (VITE_API_BASE_URL).
+  // In prod, `apiBasePath` is empty and the SPA/API share the same origin.
+  const base = (apiBasePath || window.location.origin).replace(/\/+$/, '')
+  return `${base}/api/v1/admin/mail/gmail/token/callback`
 }
 
 export default function StartupGate() {

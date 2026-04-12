@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import RootLayout from './components/RootLayout'
 import StartupGate from './components/StartupGate'
 import AppShell from './components/AppShell'

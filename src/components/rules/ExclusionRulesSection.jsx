@@ -55,11 +55,6 @@ const StackFormGrid = styled(Box)(({ theme }) => ({
   },
 }))
 
-function nullableString(v) {
-  const s = String(v ?? '').trim()
-  return s === '' ? null : s
-}
-
 const SORT_Q = 'ex_sort'
 
 const SORT_COL = {
@@ -225,6 +220,7 @@ export default function ExclusionRulesSection({
 
   const handleLeaveReturnStay = () => {
     const snackT = leaveReturnDialog.staySnack
+    const variant = leaveReturnDialog.variant
     setLeaveReturnDialog({
       open: false,
       path: null,
@@ -240,6 +236,7 @@ export default function ExclusionRulesSection({
       },
       { replace: true },
     )
+    if (variant === 'dismiss') performCloseDialog()
     if (snackT) setSnack({ open: true, message: snackT })
   }
 

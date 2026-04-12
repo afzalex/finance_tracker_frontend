@@ -17,7 +17,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import AnalyticsMonthsControl from '../components/AnalyticsMonthsControl'
 import InrAmountCell from '../components/InrAmountCell'
