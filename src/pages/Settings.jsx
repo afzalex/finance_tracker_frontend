@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PageHeader from '../components/PageHeader'
 import {
   dataCardWidthSx,
@@ -27,7 +27,12 @@ import {
   pageStackWidthSx,
 } from '../utils/responsiveTable'
 import useAppMeta from '../contexts/useAppMeta'
-import { reprocessAllEmailsOffline } from '../services/financeApi'
+import {
+  apiErrorMessage,
+  getMailIngestJob,
+  reprocessAllEmailsOffline,
+  triggerMailIngest,
+} from '../services/financeApi'
 import AppConfigSection from '../components/AppConfigSection'
 import ClassificationsSection from '../components/rules/ClassificationsSection'
 import ParsersSection from '../components/rules/ParsersSection'
@@ -75,12 +80,120 @@ function rulesQuerySuffix(searchParams) {
   return qs ? `?${qs}` : ''
 }
 
+function formatIngestStats(stats) {
+  if (!stats || typeof stats !== 'object') return ''
+  const parts = []
+  if (stats.fetched != null) parts.push(`${stats.fetched} fetched`)
+  if (stats.parsed != null) parts.push(`${stats.parsed} parsed`)
+  if (stats.unparsed != null) parts.push(`${stats.unparsed} unparsed`)
+  if (stats.skipped != null) parts.push(`${stats.skipped} skipped`)
+  if (stats.duplicate != null) parts.push(`${stats.duplicate} duplicate`)
+  return parts.join(', ')
+}
+
 function ApiTab() {
   const meta = useAppMeta()
   const [reprocessState, setReprocessState] = useState({
     status: 'idle',
     message: '',
   })
+  const [ingestDays, setIngestDays] = useState('30')
+  const [ingestMaxMessages, setIngestMaxMessages] = useState('')
+  const [ingestState, setIngestState] = useState({
+    status: 'idle',
+    message: '',
+    jobId: null,
+  })
+  const ingestPollRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (ingestPollRef.current) window.clearInterval(ingestPollRef.current)
+    }
+  }, [])
+
+  const stopIngestPoll = () => {
+    if (ingestPollRef.current) {
+      window.clearInterval(ingestPollRef.current)
+      ingestPollRef.current = null
+    }
+  }
+
+  const pollIngestJob = (jobId) => {
+    stopIngestPoll()
+    const tick = async () => {
+      try {
+        const job = await getMailIngestJob(jobId)
+        if (job.status === 'completed') {
+          stopIngestPoll()
+          const summary = formatIngestStats(job.stats)
+          setIngestState({
+            status: 'success',
+            jobId,
+            message: summary
+              ? `Ingest finished (${summary}).`
+              : 'Ingest finished.',
+          })
+        } else if (job.status === 'failed') {
+          stopIngestPoll()
+          setIngestState({
+            status: 'error',
+            jobId,
+            message: job.error ?? 'Ingest failed.',
+          })
+        }
+      } catch (e) {
+        stopIngestPoll()
+        setIngestState({
+          status: 'error',
+          jobId,
+          message: apiErrorMessage(e),
+        })
+      }
+    }
+    void tick()
+    ingestPollRef.current = window.setInterval(tick, 3000)
+  }
+
+  const onIngestMail = async () => {
+    stopIngestPoll()
+    setIngestState({ status: 'loading', message: '', jobId: null })
+    try {
+      const maxRaw = String(ingestMaxMessages ?? '').trim()
+      const data = await triggerMailIngest({
+        days: Number(ingestDays),
+        maxMessages: maxRaw === '' ? undefined : Number(maxRaw),
+        wait: false,
+      })
+      if (data?.job_id) {
+        setIngestState({
+          status: 'running',
+          jobId: data.job_id,
+          message: `Ingest started for the last ${data.lookback_days ?? ingestDays} days.`,
+        })
+        pollIngestJob(data.job_id)
+      } else if (data?.stats) {
+        const summary = formatIngestStats(data.stats)
+        setIngestState({
+          status: 'success',
+          jobId: null,
+          message: summary ? `Ingest finished (${summary}).` : 'Ingest finished.',
+        })
+      } else {
+        setIngestState({
+          status: 'success',
+          jobId: null,
+          message: 'Ingest request accepted.',
+        })
+      }
+    } catch (e) {
+      setIngestState({
+        status: 'error',
+        message: apiErrorMessage(e),
+        jobId: null,
+      })
+    }
+  }
 
   const onReprocessAll = async () => {
     setReprocessState({ status: 'loading', message: '' })
@@ -138,6 +251,72 @@ function ApiTab() {
         </Typography>
       )}
       <Divider sx={{ my: 2, ...layoutMajorDividerSx }} />
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+        Mail ingest
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Re-fetch Gmail messages from the last N days and run the ingest pipeline (ignores the stored cursor).
+      </Typography>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        alignItems={{ sm: 'flex-start' }}
+        sx={{ mb: 1 }}
+      >
+        <TextField
+          size="small"
+          type="number"
+          label="Lookback days"
+          value={ingestDays}
+          onChange={(e) => setIngestDays(e.target.value)}
+          inputProps={{ min: 1, max: 3650, step: 1, inputMode: 'numeric' }}
+          sx={{ width: { xs: '100%', sm: 140 } }}
+        />
+        <TextField
+          size="small"
+          type="number"
+          label="Max messages"
+          value={ingestMaxMessages}
+          onChange={(e) => setIngestMaxMessages(e.target.value)}
+          placeholder="Optional"
+          inputProps={{ min: 1, step: 1, inputMode: 'numeric' }}
+          helperText="Newest first in window"
+          sx={{ width: { xs: '100%', sm: 160 } }}
+        />
+        <Button
+          size="small"
+          variant="contained"
+          onClick={onIngestMail}
+          disabled={ingestState.status === 'loading' || ingestState.status === 'running'}
+          sx={{ mt: { xs: 0, sm: 0.25 } }}
+        >
+          {ingestState.status === 'loading' || ingestState.status === 'running'
+            ? 'Ingesting…'
+            : 'Ingest mail'}
+        </Button>
+      </Stack>
+      {ingestState.message ? (
+        <Box sx={{ mb: 1 }}>
+          <Alert
+            severity={
+              ingestState.status === 'error'
+                ? 'error'
+                : ingestState.status === 'running'
+                  ? 'info'
+                  : 'success'
+            }
+          >
+            {ingestState.message}
+            {ingestState.jobId && ingestState.status === 'running'
+              ? ` Job ${ingestState.jobId}.`
+              : null}
+          </Alert>
+        </Box>
+      ) : null}
+      <Divider sx={{ my: 2, ...layoutMajorDividerSx }} />
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+        Offline reprocess
+      </Typography>
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
         <Button
           size="small"

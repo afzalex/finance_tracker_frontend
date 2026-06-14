@@ -7,6 +7,8 @@ import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../services/financeApi', () => ({
   reprocessAllEmailsOffline: vi.fn(),
+  triggerMailIngest: vi.fn(),
+  getMailIngestJob: vi.fn(),
   listMailAccounts: vi.fn().mockResolvedValue([{ id: 1, provider: 'gmail', is_active: true }]),
   getAppConfig: vi.fn().mockResolvedValue([
     { key: 'app.mail.poll_seconds', value: '3600' },

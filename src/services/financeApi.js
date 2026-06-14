@@ -21,6 +21,9 @@ export function apiErrorMessage(error) {
     const parts = detail.map((d) => d?.msg ?? d).filter(Boolean)
     if (parts.length) return parts.join(', ')
   }
+  if (detail && typeof detail === 'object') {
+    if (typeof detail.message === 'string') return detail.message
+  }
   return error?.message ?? 'Request failed'
 }
 
@@ -159,6 +162,40 @@ export async function listTopEmailsWithTransactions({ limit = 8 } = {}) {
 export async function reprocessAllEmailsOffline({ wait = false } = {}) {
   const res =
     await adminApi.reprocessAllEmailsOfflineApiV1AdminEmailsReprocessPost(wait)
+  return res.data
+}
+
+/**
+ * Fetch and ingest mail from the last N days (Gmail force ingest).
+ * POST /api/v1/admin/mail/ingest
+ * @param {{ days: number, maxMessages?: number | null, wait?: boolean }} opts
+ */
+export async function triggerMailIngest({ days, maxMessages, wait = false } = {}) {
+  const d = Number(days)
+  if (!Number.isFinite(d) || d < 1) {
+    throw new Error('Lookback days must be at least 1')
+  }
+  let max = maxMessages
+  if (max != null && max !== '') {
+    max = Number(max)
+    if (!Number.isFinite(max) || max < 1) {
+      throw new Error('Max messages must be at least 1 when set')
+    }
+  } else {
+    max = undefined
+  }
+  const res = await adminApi.triggerMailIngestApiV1AdminMailIngestPost(d, max, wait)
+  return res.data
+}
+
+/**
+ * GET /api/v1/admin/mail/ingest/{job_id}
+ * @param {string} jobId
+ */
+export async function getMailIngestJob(jobId) {
+  const id = String(jobId ?? '').trim()
+  if (!id) throw new Error('Missing job id')
+  const res = await adminApi.getMailIngestJobApiV1AdminMailIngestJobIdGet(id)
   return res.data
 }
 
