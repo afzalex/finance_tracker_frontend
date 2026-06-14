@@ -370,6 +370,57 @@ export async function listAccounts({ from, to } = {}) {
   }
 }
 
+/**
+ * GET /api/v1/accounts/parties — merchant and counterparty rollups for the date range.
+ *
+ * @param {{ from?: string, to?: string, kind?: 'merchant' | 'counterparty' }} [opts]
+ * @returns {Promise<{ merchants: Array<Record<string, unknown>>, counterparties: Array<Record<string, unknown>> }>}
+ */
+export async function listAccountParties({ from, to, kind } = {}) {
+  try {
+    const params = new URLSearchParams()
+    const fromParam = normalizeYmd(from)
+    const toParam = normalizeYmd(to)
+    if (fromParam) params.set('from', fromParam)
+    if (toParam) params.set('to', toParam)
+    if (kind === 'merchant' || kind === 'counterparty') params.set('kind', kind)
+
+    const base = (apiBasePath || '').replace(/\/+$/, '')
+    const qs = params.toString()
+    const path = `/api/v1/accounts/parties${qs ? `?${qs}` : ''}`
+    const abs = base ? `${base}${path}` : path
+    const res = await fetch(abs, { headers: { Accept: 'application/json' } })
+    const text = await res.text()
+    let data = null
+    if (text) {
+      try {
+        data = JSON.parse(text)
+      } catch {
+        data = null
+      }
+    }
+    if (!res.ok) {
+      const detail = data?.detail
+      let msg
+      if (typeof detail === 'string') msg = detail
+      else if (detail && typeof detail.message === 'string') msg = detail.message
+      else if (Array.isArray(detail)) {
+        msg = detail.map((d) => d?.msg ?? d).filter(Boolean).join(', ')
+      } else {
+        msg = text || res.statusText || `HTTP ${res.status}`
+      }
+      throw new Error(msg)
+    }
+    return {
+      merchants: Array.isArray(data?.merchants) ? data.merchants : [],
+      counterparties: Array.isArray(data?.counterparties) ? data.counterparties : [],
+    }
+  } catch (err) {
+    if (err instanceof Error) throw err
+    throw new Error(apiErrorMessage(err))
+  }
+}
+
 /** PUT /api/v1/accounts — create or update metadata for ``provider`` + ``account_id``. */
 export async function upsertAccount(payload) {
   try {

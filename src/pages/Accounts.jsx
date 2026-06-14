@@ -5,6 +5,7 @@ import {
   Box,
   Card,
   CardContent,
+  Link,
   Stack,
   Table,
   TableBody,
@@ -17,7 +18,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import AccountDetailDialog from '../components/AccountDetailDialog'
 import HeaderDateRangeFilter from '../components/HeaderDateRangeFilter'
 import LoadingBlock from '../components/LoadingBlock'
@@ -25,7 +26,7 @@ import PageHeader from '../components/PageHeader'
 import SortableTableHeaderCell from '../components/SortableTableHeaderCell'
 import useDateRange from '../contexts/useDateRange'
 import useResource from '../hooks/useResource'
-import { listAccounts } from '../services/financeApi'
+import { listAccounts, listAccountParties } from '../services/financeApi'
 import InrAmountCell from '../components/InrAmountCell'
 import { balanceAmountSx } from '../utils/moneySx'
 import {
@@ -35,8 +36,313 @@ import {
   tableHorizontalScrollSx,
   tableSmallScreenTextSx,
 } from '../utils/responsiveTable'
+import { DATE_RANGE_Q } from '../utils/dateRangeUrl'
+
+const TX_COUNTERPARTY_Q = 'counterparty'
 
 const ACCOUNTS_TABLE_MIN_WIDTH = 1040
+const PARTIES_TABLE_MIN_WIDTH = 720
+
+const PARTY_SORT_COL = {
+  name: 'name',
+  debits: 'debits',
+  credits: 'credits',
+  net: 'net',
+  count: 'count',
+}
+
+function defaultDirForPartySortKey(key) {
+  if (
+    key === PARTY_SORT_COL.debits ||
+    key === PARTY_SORT_COL.credits ||
+    key === PARTY_SORT_COL.net ||
+    key === PARTY_SORT_COL.count
+  ) {
+    return 'desc'
+  }
+  return 'asc'
+}
+
+function normalizePartyRows(merchants, counterparties) {
+  const rows = []
+  for (const row of merchants) {
+    rows.push({
+      id: `merchant:${row.merchant}`,
+      name: row.merchant,
+      debit_amount: row.debit_amount,
+      credit_amount: row.credit_amount,
+      amount: row.amount,
+      count: row.count,
+    })
+  }
+  for (const row of counterparties) {
+    rows.push({
+      id: `counterparty:${row.counterparty}`,
+      name: row.counterparty,
+      debit_amount: row.debit_amount,
+      credit_amount: row.credit_amount,
+      amount: row.amount,
+      count: row.count,
+    })
+  }
+  return rows
+}
+
+function sortPartyRows(rows, sortBy, sortDir) {
+  const dir = sortDir === 'asc' ? 1 : -1
+  const copy = [...rows]
+  copy.sort((a, b) => {
+    if (sortBy === PARTY_SORT_COL.name) {
+      return String(a.name ?? '').localeCompare(String(b.name ?? '')) * dir
+    }
+    if (sortBy === PARTY_SORT_COL.debits) {
+      return ((a.debit_amount ?? 0) - (b.debit_amount ?? 0)) * dir
+    }
+    if (sortBy === PARTY_SORT_COL.credits) {
+      return ((a.credit_amount ?? 0) - (b.credit_amount ?? 0)) * dir
+    }
+    if (sortBy === PARTY_SORT_COL.net) {
+      return ((a.amount ?? 0) - (b.amount ?? 0)) * dir
+    }
+    if (sortBy === PARTY_SORT_COL.count) {
+      return ((a.count ?? 0) - (b.count ?? 0)) * dir
+    }
+    return 0
+  })
+  return copy
+}
+
+function partyTotals(rows) {
+  let debits = 0
+  let credits = 0
+  let net = 0
+  let count = 0
+  for (const row of rows) {
+    debits += Number(row.debit_amount) || 0
+    credits += Number(row.credit_amount) || 0
+    net += Number(row.amount) || 0
+    count += Number(row.count) || 0
+  }
+  return { debits, credits, net, count }
+}
+
+function PartyRollupTable({
+  rows,
+  loading,
+  sortBy,
+  sortDir,
+  onToggleSort,
+  getPartyTransactionsTo,
+  theme,
+}) {
+  const sortedRows = useMemo(
+    () => sortPartyRows(rows, sortBy, sortDir),
+    [rows, sortBy, sortDir],
+  )
+  const totals = useMemo(() => partyTotals(sortedRows), [sortedRows])
+
+  return (
+    <Card variant="outlined" sx={dataCardWidthSx}>
+      <CardContent sx={{ minWidth: 0 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Merchants & Counterparties
+        </Typography>
+        {loading ? (
+          <LoadingBlock />
+        ) : (
+          <Box sx={tableHorizontalScrollSx}>
+            <Table
+              size="small"
+              aria-label="Merchants and Counterparties table"
+              sx={[
+                {
+                  minWidth: PARTIES_TABLE_MIN_WIDTH,
+                  tableLayout: 'auto',
+                },
+                tableSmallScreenTextSx(theme),
+              ]}
+            >
+              <TableHead>
+                <TableRow>
+                  <SortableTableHeaderCell
+                    sortDirection={sortBy === PARTY_SORT_COL.name ? sortDir : false}
+                    active={sortBy === PARTY_SORT_COL.name}
+                    direction={sortBy === PARTY_SORT_COL.name ? sortDir : 'asc'}
+                    onSort={() => onToggleSort(PARTY_SORT_COL.name)}
+                  >
+                    Merchant / Counterparty
+                  </SortableTableHeaderCell>
+                  <SortableTableHeaderCell
+                    align="right"
+                    sx={{ whiteSpace: 'nowrap' }}
+                    sortDirection={sortBy === PARTY_SORT_COL.count ? sortDir : false}
+                    active={sortBy === PARTY_SORT_COL.count}
+                    direction={sortBy === PARTY_SORT_COL.count ? sortDir : 'asc'}
+                    onSort={() => onToggleSort(PARTY_SORT_COL.count)}
+                  >
+                    Transactions
+                  </SortableTableHeaderCell>
+                  <SortableTableHeaderCell
+                    align="right"
+                    sx={{ whiteSpace: 'nowrap' }}
+                    sortDirection={sortBy === PARTY_SORT_COL.debits ? sortDir : false}
+                    active={sortBy === PARTY_SORT_COL.debits}
+                    direction={sortBy === PARTY_SORT_COL.debits ? sortDir : 'asc'}
+                    onSort={() => onToggleSort(PARTY_SORT_COL.debits)}
+                  >
+                    Debits
+                  </SortableTableHeaderCell>
+                  <SortableTableHeaderCell
+                    align="right"
+                    sx={{ whiteSpace: 'nowrap' }}
+                    sortDirection={sortBy === PARTY_SORT_COL.credits ? sortDir : false}
+                    active={sortBy === PARTY_SORT_COL.credits}
+                    direction={sortBy === PARTY_SORT_COL.credits ? sortDir : 'asc'}
+                    onSort={() => onToggleSort(PARTY_SORT_COL.credits)}
+                  >
+                    Credits
+                  </SortableTableHeaderCell>
+                  <SortableTableHeaderCell
+                    align="right"
+                    sx={{ whiteSpace: 'nowrap' }}
+                    sortDirection={sortBy === PARTY_SORT_COL.net ? sortDir : false}
+                    active={sortBy === PARTY_SORT_COL.net}
+                    direction={sortBy === PARTY_SORT_COL.net ? sortDir : 'asc'}
+                    onSort={() => onToggleSort(PARTY_SORT_COL.net)}
+                  >
+                    Net
+                  </SortableTableHeaderCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sortedRows.map((row) => {
+                  const partyName = row.name?.trim() ? row.name : ''
+                  const transactionsTo = partyName ? getPartyTransactionsTo(partyName) : null
+                  return (
+                  <TableRow key={row.id} hover>
+                    <TableCell sx={{ maxWidth: 240 }}>
+                      {transactionsTo ? (
+                        <Link
+                          component={RouterLink}
+                          to={transactionsTo}
+                          underline="hover"
+                          variant="body2"
+                          sx={{ wordBreak: 'break-word' }}
+                          aria-label={`View transactions for ${partyName}`}
+                        >
+                          {partyName}
+                        </Link>
+                      ) : (
+                        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      {row.count != null ? row.count : '—'}
+                    </TableCell>
+                    <TableCell align="right">
+                      <InrAmountCell value={row.debit_amount ?? 0} />
+                    </TableCell>
+                    <TableCell align="right">
+                      <InrAmountCell value={row.credit_amount ?? 0} />
+                    </TableCell>
+                    <TableCell align="right" sx={balanceAmountSx(row.amount)}>
+                      <InrAmountCell value={row.amount} />
+                    </TableCell>
+                  </TableRow>
+                  )
+                })}
+                {sortedRows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <Typography variant="body2" color="text.secondary">
+                        No merchants or Counterparties for this range.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              {sortedRows.length > 0 && (
+                <TableFooter
+                  sx={{
+                    '& .MuiTableCell-root': {
+                      borderTop: (t) => `3px solid ${t.palette.divider}`,
+                      borderBottom: 'none',
+                      py: 1.5,
+                      fontSize: '0.875rem',
+                      [theme.breakpoints.down('md')]: {
+                        fontSize: '0.8125rem',
+                      },
+                    },
+                  }}
+                >
+                  <TableRow aria-label="Totals for merchants and Counterparties">
+                    <TableCell align="right" sx={{ verticalAlign: 'middle' }}>
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.12em',
+                          fontSize: '0.7rem',
+                        }}
+                      >
+                        Totals
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography
+                        variant="body2"
+                        fontWeight={700}
+                        sx={{ fontVariantNumeric: 'tabular-nums', color: 'text.primary' }}
+                        component="span"
+                      >
+                        {totals.count}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <InrAmountCell value={totals.debits} totalRow />
+                    </TableCell>
+                    <TableCell align="right">
+                      <InrAmountCell value={totals.credits} totalRow />
+                    </TableCell>
+                    <TableCell align="right" sx={balanceAmountSx(totals.net)}>
+                      <InrAmountCell value={totals.net} totalRow />
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function usePartySort(defaultSortBy = PARTY_SORT_COL.count) {
+  const [sortBy, setSortBy] = useState(defaultSortBy)
+  const [sortDir, setSortDir] = useState('desc')
+
+  const toggleSort = useCallback((key) => {
+    setSortBy((prevBy) => {
+      if (prevBy === key) {
+        setSortDir((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'))
+        return prevBy
+      }
+      setSortDir(defaultDirForPartySortKey(key))
+      return key
+    })
+  }, [])
+
+  return { sortBy, sortDir, toggleSort }
+}
+
+const EMPTY_MERCHANTS = []
+const EMPTY_COUNTERPARTIES = []
 
 /** Persisted in URL on the accounts page (same pattern as transactions `sort`). */
 const ACC_SORT_Q = 'acc_sort'
@@ -89,6 +395,7 @@ export default function Accounts() {
   const theme = useTheme()
   const isMdDown = useMediaQuery(theme.breakpoints.down('md'))
   const navigate = useNavigate()
+  const location = useLocation()
   const params = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const routeAccountId = params.accountId ? String(params.accountId) : null
@@ -117,7 +424,51 @@ export default function Accounts() {
     `accounts:${accountsResourceKey}`,
     () => listAccounts({ from: dateRangeFrom, to: dateRangeTo }),
   )
+  const partiesResourceKey = useMemo(
+    () =>
+      JSON.stringify({
+        refresh: listRefresh,
+        from: dateRangeFrom,
+        to: dateRangeTo,
+      }),
+    [listRefresh, dateRangeFrom, dateRangeTo],
+  )
+  const {
+    status: partiesStatus,
+    data: partiesData,
+    error: partiesError,
+  } = useResource(
+    `accountParties:${partiesResourceKey}`,
+    () => listAccountParties({ from: dateRangeFrom, to: dateRangeTo }),
+  )
   const accounts = data ?? EMPTY_ACCOUNTS
+  const partyRows = useMemo(
+    () =>
+      normalizePartyRows(
+        partiesData?.merchants ?? EMPTY_MERCHANTS,
+        partiesData?.counterparties ?? EMPTY_COUNTERPARTIES,
+      ),
+    [partiesData],
+  )
+  const partiesLoading = partiesStatus === 'loading'
+
+  const partySort = usePartySort()
+
+  const getPartyTransactionsTo = useCallback(
+    (name) => {
+      const trimmed = String(name ?? '').trim()
+      if (!trimmed) return '/transactions'
+      const sp = new URLSearchParams()
+      sp.set(DATE_RANGE_Q.from, dateRangeFrom)
+      sp.set(DATE_RANGE_Q.to, dateRangeTo)
+      sp.set(TX_COUNTERPARTY_Q, trimmed)
+      sp.set('page', '0')
+      sp.set('ps', '25')
+      sp.set('returnTo', `${location.pathname}${location.search}`)
+      return `/transactions?${sp.toString()}`
+    },
+    [dateRangeFrom, dateRangeTo, location.pathname, location.search],
+  )
 
   const selectedAccount = useMemo(() => {
     if (!decodedAccountId) return null
@@ -234,9 +585,13 @@ export default function Accounts() {
       </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
+      {partiesError && <Alert severity="error">{partiesError}</Alert>}
 
       <Card variant="outlined" sx={dataCardWidthSx}>
         <CardContent sx={{ minWidth: 0 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            By account
+          </Typography>
           {status === 'loading' ? (
             <LoadingBlock />
           ) : (
@@ -493,6 +848,16 @@ export default function Accounts() {
           )}
         </CardContent>
       </Card>
+
+      <PartyRollupTable
+        rows={partyRows}
+        loading={partiesLoading}
+        sortBy={partySort.sortBy}
+        sortDir={partySort.sortDir}
+        onToggleSort={partySort.toggleSort}
+        getPartyTransactionsTo={getPartyTransactionsTo}
+        theme={theme}
+      />
 
       <AccountDetailDialog
         open={Boolean(routeAccountId)}

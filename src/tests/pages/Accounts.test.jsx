@@ -9,6 +9,7 @@ import * as financeApi from '../../services/financeApi'
 
 vi.mock('../../services/financeApi', () => ({
   listAccounts: vi.fn(),
+  listAccountParties: vi.fn(),
   upsertAccount: vi.fn(),
 }))
 
@@ -28,6 +29,10 @@ function renderAccountsAt(path = '/accounts') {
 describe('Accounts', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    financeApi.listAccountParties.mockResolvedValue({
+      merchants: [],
+      counterparties: [],
+    })
   })
 
   it('renders loading slate and then accounts list', async () => {
@@ -175,7 +180,8 @@ describe('Accounts', () => {
     expect(nameCells()).toEqual(['Beta', 'Alpha'])
 
     const user = userEvent.setup()
-    const netHeader = screen.getByRole('columnheader', { name: /Net/i })
+    const accountsTable = screen.getByRole('table', { name: 'accounts table' })
+    const netHeader = within(accountsTable).getByRole('columnheader', { name: /Net/i })
     await user.click(within(netHeader).getByRole('button'))
 
     await waitFor(() => {
@@ -282,5 +288,45 @@ describe('Accounts', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Account' })).toBeInTheDocument()
     })
+  })
+
+  it('renders merchant and counterparty rollups in one table', async () => {
+    financeApi.listAccounts.mockResolvedValueOnce([])
+    financeApi.listAccountParties.mockResolvedValueOnce({
+      merchants: [
+        {
+          merchant: 'Amazon',
+          debit_amount: 100,
+          credit_amount: 0,
+          amount: -100,
+          count: 2,
+        },
+      ],
+      counterparties: [
+        {
+          counterparty: 'Payee Co',
+          debit_amount: 50,
+          credit_amount: 10,
+          amount: -40,
+          count: 1,
+        },
+      ],
+    })
+
+    renderAccountsAt()
+
+    await waitFor(() => {
+      expect(screen.getByText('Amazon')).toBeInTheDocument()
+      expect(screen.getByText('Payee Co')).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getByRole('link', { name: 'View transactions for Amazon' }),
+    ).toHaveAttribute('href', expect.stringMatching(/counterparty=Amazon/))
+    expect(
+      screen.getByRole('link', { name: 'View transactions for Payee Co' }),
+    ).toHaveAttribute('href', expect.stringMatching(/counterparty=Payee(\+|%20)Co/))
+    expect(screen.queryByRole('table', { name: 'Merchants table' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Counterparties table' })).not.toBeInTheDocument()
   })
 })

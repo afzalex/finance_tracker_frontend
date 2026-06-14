@@ -650,7 +650,7 @@ export default function ExclusionRulesSection({
                     {...params}
                     label="Matching Payees"
                     placeholder="Select or type..."
-                    helperText="Creates exclusion if transaction counterparty or merchant matches any payee exactly (case-insensitive)."
+                    helperText="Creates exclusion if transaction Counterparty or merchant matches any payee exactly (case-insensitive)."
                   />
                 )}
                 renderTags={(value, getTagProps) =>

@@ -69,15 +69,15 @@ describe('Analytics', () => {
     await waitFor(() => {
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
       expect(
-        screen.getByText('Top merchants and counterparties'),
+        screen.getByText('Top merchants and Counterparties'),
       ).toBeInTheDocument()
     })
 
     expect(
-      screen.getByText('Top merchants and counterparties'),
+      screen.getByText('Top merchants and Counterparties'),
     ).toBeInTheDocument()
     const merchantsTable = screen.getByRole('table', {
-      name: 'Top merchants and counterparties table',
+      name: 'Top merchants and Counterparties table',
     })
     expect(within(merchantsTable).getByText('Amazon')).toBeInTheDocument()
     expect(within(merchantsTable).getByText('3')).toBeInTheDocument()
@@ -197,7 +197,7 @@ describe('Analytics', () => {
       })
 
       const merchantsTable = screen.getByRole('table', {
-        name: 'Top merchants and counterparties table',
+        name: 'Top merchants and Counterparties table',
       })
       expect(within(merchantsTable).getByText('UNDEFINED')).toBeInTheDocument()
       expect(

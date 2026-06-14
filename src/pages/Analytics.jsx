@@ -174,73 +174,6 @@ export default function Analytics() {
             <CardContent sx={{ minWidth: 0 }}>
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                justifyContent="space-between"
-                gap={1}
-                sx={{ mb: 0 }}
-              >
-                <Typography variant="h6">Top merchants and counterparties</Typography>
-              </Stack>
-              <Divider sx={layoutSectionDividerSx} />
-              <Box sx={tableHorizontalScrollSx}>
-                <Table
-                  size="small"
-                  aria-label="Top merchants and counterparties table"
-                  sx={[
-                    { minWidth: MERCHANTS_TABLE_MIN, width: '100%' },
-                    tableSmallScreenTextSx(theme),
-                  ]}
-                >
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Merchant / counterparty</TableCell>
-                    <TableCell align="right">Transactions</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {merchantsStatus === 'loading' ? (
-                    <TableRow>
-                      <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
-                        <CircularProgress size={28} />
-                      </TableCell>
-                    </TableRow>
-                  ) : (topMerchants?.length ?? 0) === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3}>
-                        <Typography variant="body2" color="text.secondary">
-                          No merchant data for this range.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    topMerchants.map((row, i) => (
-                      <TableRow key={`${row.merchant}:${i}`} hover>
-                        <TableCell>
-                          <TopMerchantNameCell merchant={row.merchant} />
-                        </TableCell>
-                        <TableCell
-                          align="right"
-                          sx={{ fontVariantNumeric: 'tabular-nums' }}
-                        >
-                          {row.transactionCount}
-                        </TableCell>
-                        <TableCell align="right">
-                          <InrAmountCell value={-row.total} />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              </Box>
-            </CardContent>
-          </Card>
-
-          <Card variant="outlined" sx={dataCardWidthSx}>
-            <CardContent sx={{ minWidth: 0 }}>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
                 alignItems={{ xs: 'flex-start', sm: 'baseline' }}
                 justifyContent="space-between"
                 gap={0.75}
@@ -320,6 +253,73 @@ export default function Analytics() {
                         </TableRow>
                       )
                     })
+                  )}
+                </TableBody>
+              </Table>
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Card variant="outlined" sx={dataCardWidthSx}>
+            <CardContent sx={{ minWidth: 0 }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+                justifyContent="space-between"
+                gap={1}
+                sx={{ mb: 0 }}
+              >
+                <Typography variant="h6">Top merchants and Counterparties</Typography>
+              </Stack>
+              <Divider sx={layoutSectionDividerSx} />
+              <Box sx={tableHorizontalScrollSx}>
+                <Table
+                  size="small"
+                  aria-label="Top merchants and Counterparties table"
+                  sx={[
+                    { minWidth: MERCHANTS_TABLE_MIN, width: '100%' },
+                    tableSmallScreenTextSx(theme),
+                  ]}
+                >
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Merchant / Counterparty</TableCell>
+                    <TableCell align="right">Transactions</TableCell>
+                    <TableCell align="right">Total</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {merchantsStatus === 'loading' ? (
+                    <TableRow>
+                      <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
+                        <CircularProgress size={28} />
+                      </TableCell>
+                    </TableRow>
+                  ) : (topMerchants?.length ?? 0) === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3}>
+                        <Typography variant="body2" color="text.secondary">
+                          No merchant data for this range.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    topMerchants.map((row, i) => (
+                      <TableRow key={`${row.merchant}:${i}`} hover>
+                        <TableCell>
+                          <TopMerchantNameCell merchant={row.merchant} />
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sx={{ fontVariantNumeric: 'tabular-nums' }}
+                        >
+                          {row.transactionCount}
+                        </TableCell>
+                        <TableCell align="right">
+                          <InrAmountCell value={-row.total} />
+                        </TableCell>
+                      </TableRow>
+                    ))
                   )}
                 </TableBody>
               </Table>
