@@ -152,6 +152,12 @@ export default function ClassificationsSection({
     return items
   }, [data, showInactive, searchQuery])
 
+  const classificationPrefillSources = useMemo(() => {
+    const items = [...(data ?? [])]
+    items.sort((a, b) => String(a.name ?? '').localeCompare(String(b.name ?? ''), undefined, { sensitivity: 'base' }))
+    return items
+  }, [data])
+
   const sortedClassifications = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
     const copy = [...classifications]
@@ -204,6 +210,7 @@ export default function ClassificationsSection({
     mode: 'create',
     rule: null,
   })
+  const [classificationPrefillSelectKey, setClassificationPrefillSelectKey] = useState(0)
 
   const emptyForm = useMemo(
     () => ({
@@ -239,11 +246,11 @@ export default function ClassificationsSection({
     bodyMatch: form.body_match_regex,
   })
 
-  const performCloseDialog = () => {
+  const performCloseDialog = (opts = {}) => {
     const wasEdit = dialog.mode === 'edit'
     const wasCreateFromRoute = dialog.mode === 'create' && routeCreate
     setDialog({ open: false, mode: 'create', rule: null })
-    if (wasEdit || wasCreateFromRoute) onCloseRule?.()
+    if (wasEdit || wasCreateFromRoute) onCloseRule?.(opts)
   }
 
   const [leaveReturnDialog, setLeaveReturnDialog] = useState({
@@ -265,13 +272,12 @@ export default function ClassificationsSection({
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (!next.has('returnTo')) return prev
         next.delete('returnTo')
         return next
       },
       { replace: true },
     )
-    if (variant === 'dismiss') performCloseDialog()
+    if (variant === 'dismiss') performCloseDialog({ stripReturnTo: true })
     if (snack) setSnack({ open: true, message: snack })
   }
 
@@ -301,9 +307,28 @@ export default function ClassificationsSection({
     })
   }
 
+  const applyClassificationPrefill = useCallback((src) => {
+    if (!src) return
+    setForm((f) => ({
+      ...f,
+      name: '',
+      message_type: src.message_type ?? '',
+      priority: src.priority != null ? String(src.priority) : '',
+      is_active: Boolean(src.is_active),
+      subject_match_regex: src.subject_match_regex ?? '',
+      subject_extract_regex: src.subject_extract_regex ?? '',
+      sender_match_regex: src.sender_match_regex ?? '',
+      body_match_regex: src.body_match_regex ?? '',
+      body_extract_regex: src.body_extract_regex ?? '',
+      snippet_extract_regex: src.snippet_extract_regex ?? '',
+    }))
+    setClassificationPrefillSelectKey((k) => k + 1)
+  }, [])
+
   const openCreate = () => {
     setMutationError(null)
     setForm(emptyForm)
+    setClassificationPrefillSelectKey((k) => k + 1)
     setDialog({ open: true, mode: 'create', rule: null })
   }
 
@@ -657,10 +682,48 @@ export default function ClassificationsSection({
         </DialogTitle>
         <DialogContent dividers sx={{ position: 'relative' }}>
           <Stack spacing={layoutSectionSpacing}>
+            {dialog.mode === 'create' && classificationPrefillSources.length > 0 ? (
+              <TextField
+                key={classificationPrefillSelectKey}
+                size="small"
+                select
+                fullWidth
+                label="Prefill from existing"
+                defaultValue=""
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (!raw) return
+                  const id = Number(raw)
+                  const src = classificationPrefillSources.find((c) => c.id === id)
+                  if (src) applyClassificationPrefill(src)
+                }}
+                helperText="Copies every section below (matchers, extractors, etc.) except the name."
+              >
+                <MenuItem value="">
+                  <em>Select a classification…</em>
+                </MenuItem>
+                {classificationPrefillSources.map((c) => (
+                  <MenuItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                    {c.is_active ? '' : ' (inactive)'}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
             <Typography variant="subtitle2" color="text.secondary">
               Core
             </Typography>
             <StackFormGrid>
+              <TextField
+                size="small"
+                label="Name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                required
+                fullWidth
+              />
               <TextField
                 size="small"
                 label="Message Type"
@@ -678,14 +741,6 @@ export default function ClassificationsSection({
                   </MenuItem>
                 ))}
               </TextField>
-              <TextField
-                size="small"
-                label="Name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                required
-                fullWidth
-              />
               <TextField
                 size="small"
                 label="Priority"

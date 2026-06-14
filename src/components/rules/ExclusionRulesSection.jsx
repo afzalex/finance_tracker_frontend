@@ -204,11 +204,11 @@ export default function ExclusionRulesSection({
 
   const [form, setForm] = useState(emptyForm)
 
-  const performCloseDialog = () => {
+  const performCloseDialog = (opts = {}) => {
     const wasEdit = dialog.mode === 'edit'
     const wasCreateFromRoute = dialog.mode === 'create' && routeCreate
     setDialog({ open: false, mode: 'create', rule: null })
-    if (wasEdit || wasCreateFromRoute) onCloseRule?.()
+    if (wasEdit || wasCreateFromRoute) onCloseRule?.(opts)
   }
 
   const [leaveReturnDialog, setLeaveReturnDialog] = useState({
@@ -230,13 +230,12 @@ export default function ExclusionRulesSection({
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (!next.has('returnTo')) return prev
         next.delete('returnTo')
         return next
       },
       { replace: true },
     )
-    if (variant === 'dismiss') performCloseDialog()
+    if (variant === 'dismiss') performCloseDialog({ stripReturnTo: true })
     if (snackT) setSnack({ open: true, message: snackT })
   }
 

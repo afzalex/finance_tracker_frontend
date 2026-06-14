@@ -254,12 +254,12 @@ export default function Settings() {
     navigate(`/settings/classifications/${id}${suffix}`)
   }
 
-  const closeClassificationRoute = () => {
-    const sp = new URLSearchParams()
-    const ret = searchParams.get('returnTo')
-    if (ret) sp.set('returnTo', ret)
+  const closeClassificationRoute = (opts = {}) => {
+    const sp = new URLSearchParams(searchParams)
+    sp.delete('tab')
+    if (opts.stripReturnTo) sp.delete('returnTo')
     const qs = sp.toString()
-    navigate(qs ? `/settings/classifications?${qs}` : '/settings/classifications')
+    navigate(qs ? `/settings/classifications?${qs}` : '/settings/classifications', { replace: true })
   }
 
   const openParserById = (id) => {
@@ -267,12 +267,12 @@ export default function Settings() {
     navigate(`/settings/parsers/${id}${suffix}`)
   }
 
-  const closeParserRoute = () => {
-    const sp = new URLSearchParams()
-    const ret = searchParams.get('returnTo')
-    if (ret) sp.set('returnTo', ret)
+  const closeParserRoute = (opts = {}) => {
+    const sp = new URLSearchParams(searchParams)
+    sp.delete('tab')
+    if (opts.stripReturnTo) sp.delete('returnTo')
     const qs = sp.toString()
-    navigate(qs ? `/settings/parsers?${qs}` : '/settings/parsers')
+    navigate(qs ? `/settings/parsers?${qs}` : '/settings/parsers', { replace: true })
   }
 
   const openExclusionById = (id) => {
@@ -280,12 +280,12 @@ export default function Settings() {
     navigate(`/settings/exclusions/${id}${suffix}`)
   }
 
-  const closeExclusionRoute = () => {
-    const sp = new URLSearchParams()
-    const ret = searchParams.get('returnTo')
-    if (ret) sp.set('returnTo', ret)
+  const closeExclusionRoute = (opts = {}) => {
+    const sp = new URLSearchParams(searchParams)
+    sp.delete('tab')
+    if (opts.stripReturnTo) sp.delete('returnTo')
     const qs = sp.toString()
-    navigate(qs ? `/settings/exclusions?${qs}` : '/settings/exclusions')
+    navigate(qs ? `/settings/exclusions?${qs}` : '/settings/exclusions', { replace: true })
   }
 
   return (

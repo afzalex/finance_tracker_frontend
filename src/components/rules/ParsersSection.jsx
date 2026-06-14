@@ -94,7 +94,7 @@ const PRC_SORT_COL = {
 
 const PRC_SORT_FIELDS = Object.values(PRC_SORT_COL)
 
-/** Bordered panel for matcher list + extract highlight previews (two-layer stack). */
+/** Bordered panel for Matching Mails (matcher section) and Match preview (extractors). */
 const REGEX_PREVIEW_PANEL_SX = {
   border: (t) =>
     `1px solid ${
@@ -170,6 +170,16 @@ export default function ParsersSection({
     return items
   }, [data, showInactive, searchQuery])
 
+  const parserPrefillSources = useMemo(() => {
+    const items = [...(data ?? [])]
+    items.sort((a, b) => {
+      const la = String(a.label ?? a.name ?? '')
+      const lb = String(b.label ?? b.name ?? '')
+      return la.localeCompare(lb, undefined, { sensitivity: 'base' })
+    })
+    return items
+  }, [data])
+
   const sortedParsers = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1
     const copy = [...parsers]
@@ -222,6 +232,7 @@ export default function ParsersSection({
     mode: 'create',
     rule: null,
   })
+  const [parserPrefillSelectKey, setParserPrefillSelectKey] = useState(0)
 
   const emptyForm = useMemo(
     () => ({
@@ -411,11 +422,11 @@ export default function ParsersSection({
     })
   }, [dialog.open])
 
-  const performCloseDialog = () => {
+  const performCloseDialog = (opts = {}) => {
     const wasEdit = dialog.mode === 'edit'
     const wasCreateFromRoute = dialog.mode === 'create' && routeCreate
     setDialog({ open: false, mode: 'create', rule: null })
-    if (wasEdit || wasCreateFromRoute) onCloseRule?.()
+    if (wasEdit || wasCreateFromRoute) onCloseRule?.(opts)
   }
 
   const [leaveReturnDialog, setLeaveReturnDialog] = useState({
@@ -437,13 +448,12 @@ export default function ParsersSection({
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev)
-        if (!next.has('returnTo')) return prev
         next.delete('returnTo')
         return next
       },
       { replace: true },
     )
-    if (variant === 'dismiss') performCloseDialog()
+    if (variant === 'dismiss') performCloseDialog({ stripReturnTo: true })
     if (snack) setSnack({ open: true, message: snack })
   }
 
@@ -473,9 +483,37 @@ export default function ParsersSection({
     })
   }
 
+  const applyParserPrefill = useCallback((src) => {
+    if (!src) return
+    setForm((f) => ({
+      ...f,
+      label: '',
+      name: '',
+      priority: src.priority != null ? String(src.priority) : '',
+      is_active: Boolean(src.is_active),
+      transaction_type: src.transaction_type ?? '',
+      sub_type: src.sub_type ?? '',
+      status: src.status ?? '',
+      account_type: src.account_type ?? '',
+      provider: src.provider ?? '',
+      subject_match_regex: src.subject_match_regex ?? '',
+      subject_extract_regex: src.subject_extract_regex ?? '',
+      sender_match_regex: src.sender_match_regex ?? '',
+      body_match_regex: src.body_match_regex ?? '',
+      body_extract_regex: src.body_extract_regex ?? '',
+      snippet_extract_regex: src.snippet_extract_regex ?? '',
+      txn_date_fmt: src.txn_date_fmt ?? '',
+      txn_time_fmt: src.txn_time_fmt ?? '',
+      default_category: src.default_category ?? '',
+      default_account_id: src.default_account_id ?? '',
+    }))
+    setParserPrefillSelectKey((k) => k + 1)
+  }, [])
+
   const openCreate = () => {
     setMutationError(null)
     setForm(emptyForm)
+    setParserPrefillSelectKey((k) => k + 1)
     setDialog({ open: true, mode: 'create', rule: null })
   }
 
@@ -847,23 +885,53 @@ export default function ParsersSection({
         </DialogTitle>
         <DialogContent dividers sx={{ position: 'relative' }}>
           <Stack spacing={layoutSectionSpacing}>
+            {dialog.mode === 'create' && parserPrefillSources.length > 0 ? (
+              <TextField
+                key={parserPrefillSelectKey}
+                size="small"
+                select
+                fullWidth
+                label="Prefill from existing"
+                defaultValue=""
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (!raw) return
+                  const id = Number(raw)
+                  const src = parserPrefillSources.find((p) => p.id === id)
+                  if (src) applyParserPrefill(src)
+                }}
+                helperText="Copies every section below except label and name — set those for the new parser."
+              >
+                <MenuItem value="">
+                  <em>Select a parser…</em>
+                </MenuItem>
+                {parserPrefillSources.map((p) => (
+                  <MenuItem key={p.id} value={String(p.id)}>
+                    {p.label || p.name || `Parser ${p.id}`}
+                    {p.is_active ? '' : ' (inactive)'}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
             <Typography variant="subtitle2" color="text.secondary">
               Core
             </Typography>
             <StackFormGrid>
               <TextField
                 size="small"
-                label="Label"
-                value={form.label}
-                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+                label="Name"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 required
                 fullWidth
               />
               <TextField
                 size="small"
-                label="Name"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                label="Label"
+                value={form.label}
+                onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
                 required
                 fullWidth
               />
@@ -1129,6 +1197,102 @@ export default function ParsersSection({
               />
             </StackFormGrid>
 
+            {previewEnabled && !hasContextMail ? (
+              <Box sx={{ ...REGEX_PREVIEW_PANEL_SX, mt: 0.75 }}>
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  alignItems={{ xs: 'stretch', sm: 'center' }}
+                  justifyContent="space-between"
+                  gap={1}
+                  sx={{ mb: 1 }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                      Matching Mails
+                    </Typography>
+                  </Box>
+
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="flex-end"
+                    gap={0.75}
+                    sx={{ flexShrink: 0, minWidth: 0, textAlign: 'right' }}
+                  >
+                    {previewState.status !== 'idle' ? (
+                      <Tooltip title="Refresh matching mails" placement="top">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              void fetchMatchingMailsPreview()
+                            }}
+                            disabled={previewState.status === 'loading'}
+                            aria-label="Refresh matching mails"
+                          >
+                            <RefreshCw size={18} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    ) : null}
+                    {previewState.status !== 'idle' ? (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          textAlign: { xs: 'left', sm: 'right' },
+                          maxWidth: { xs: '100%', sm: 360 },
+                        }}
+                      >
+                        Showing up to <b>{MATCH_PREVIEW_LIMIT}</b> matches (
+                        {previewState.data?.windowLabel ?? MATCH_PREVIEW_FALLBACK_WINDOW})
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                </Stack>
+
+                <Divider sx={{ mb: 1.25 }} />
+
+                {previewState.status === 'idle' ? null : previewState.status === 'loading' ? (
+                  <Stack divider={<Divider flexItem />} spacing={0}>
+                    {Array.from({ length: MATCH_PREVIEW_LIMIT }, (_, idx) => (
+                      <Box key={idx} sx={{ py: 1.25 }}>
+                        <Skeleton variant="text" animation="wave" width="82%" height={22} />
+                        <Skeleton variant="text" animation="wave" width="46%" height={16} sx={{ mt: 0.25 }} />
+                        <Skeleton variant="text" animation="wave" width="100%" height={18} sx={{ mt: 1 }} />
+                        <Skeleton variant="text" animation="wave" width="91%" height={18} sx={{ mt: 0.5 }} />
+                      </Box>
+                    ))}
+                  </Stack>
+                ) : previewState.status === 'error' ? (
+                  <Typography variant="body2" color="warning.main">
+                    {previewState.error ?? 'Preview failed.'}
+                  </Typography>
+                ) : previewState.status === 'empty' ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No mails matched these rules (
+                    {previewState.data?.windowLabel ?? MATCH_PREVIEW_FALLBACK_WINDOW}).
+                  </Typography>
+                ) : (
+                  <Stack divider={<Divider flexItem />} spacing={0}>
+                    {(previewState.data?.items ?? []).slice(0, MATCH_PREVIEW_LIMIT).map((m, idx) => (
+                      <Box key={`${m.mail_id}:${m.when}:${idx}`} sx={{ py: 1.25 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {m.subject}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                          {m.sender} • {m.when}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          {m.snippet}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+            ) : null}
+
             <Divider />
 
             <Stack
@@ -1216,175 +1380,77 @@ export default function ParsersSection({
               />
             </StackFormGrid>
 
-            {(previewEnabled && !hasContextMail) || extractPreviewEnabled ? (
+            {extractPreviewEnabled ? (
               <Stack spacing={1.5} sx={{ pt: 0.5 }}>
-                {previewEnabled && !hasContextMail ? (
-                  <Box sx={REGEX_PREVIEW_PANEL_SX}>
-                    <Stack
-                      direction={{ xs: 'column', sm: 'row' }}
-                      alignItems={{ xs: 'stretch', sm: 'center' }}
-                      justifyContent="space-between"
-                      gap={1}
-                      sx={{ mb: 1 }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                          Matching Mails
-                        </Typography>
-                      </Box>
+                <Box sx={REGEX_PREVIEW_PANEL_SX}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 1 }}>
+                    Match preview
+                  </Typography>
 
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        justifyContent="flex-end"
-                        gap={0.75}
-                        sx={{ flexShrink: 0, minWidth: 0, textAlign: 'right' }}
-                      >
-                        {previewState.status !== 'idle' ? (
-                          <Tooltip title="Refresh matching mails" placement="top">
-                            <span>
-                              <IconButton
-                                size="small"
-                                onClick={() => {
-                                  void fetchMatchingMailsPreview()
-                                }}
-                                disabled={previewState.status === 'loading'}
-                                aria-label="Refresh matching mails"
-                              >
-                                <RefreshCw size={18} />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        ) : null}
-                        {previewState.status !== 'idle' ? (
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{
-                              textAlign: { xs: 'left', sm: 'right' },
-                              maxWidth: { xs: '100%', sm: 360 },
-                            }}
-                          >
-                            Showing up to <b>{MATCH_PREVIEW_LIMIT}</b> matches (
-                            {previewState.data?.windowLabel ?? MATCH_PREVIEW_FALLBACK_WINDOW})
-                          </Typography>
-                        ) : null}
-                      </Stack>
-                    </Stack>
-
-                    <Divider sx={{ mb: 1.25 }} />
-
-                    {previewState.status === 'idle' ? null : previewState.status === 'loading' ? (
-                      <Stack divider={<Divider flexItem />} spacing={0}>
-                        {Array.from({ length: MATCH_PREVIEW_LIMIT }, (_, idx) => (
-                          <Box key={idx} sx={{ py: 1.25 }}>
-                            <Skeleton variant="text" animation="wave" width="82%" height={22} />
-                            <Skeleton variant="text" animation="wave" width="46%" height={16} sx={{ mt: 0.25 }} />
-                            <Skeleton variant="text" animation="wave" width="100%" height={18} sx={{ mt: 1 }} />
-                            <Skeleton variant="text" animation="wave" width="91%" height={18} sx={{ mt: 0.5 }} />
-                          </Box>
-                        ))}
-                      </Stack>
-                    ) : previewState.status === 'error' ? (
-                      <Typography variant="body2" color="warning.main">
-                        {previewState.error ?? 'Preview failed.'}
-                      </Typography>
-                    ) : previewState.status === 'empty' ? (
-                      <Typography variant="body2" color="text.secondary">
-                        No mails matched these rules (
-                        {previewState.data?.windowLabel ?? MATCH_PREVIEW_FALLBACK_WINDOW}).
-                      </Typography>
-                    ) : (
-                      <Stack divider={<Divider flexItem />} spacing={0}>
-                        {(previewState.data?.items ?? []).slice(0, MATCH_PREVIEW_LIMIT).map((m, idx) => (
-                          <Box key={`${m.mail_id}:${m.when}:${idx}`} sx={{ py: 1.25 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                              {m.subject}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                              {m.sender} • {m.when}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                              {m.snippet}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Stack>
-                    )}
-                  </Box>
-                ) : null}
-
-                {extractPreviewEnabled ? (
-                  <Box sx={REGEX_PREVIEW_PANEL_SX}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2, mb: 1 }}>
-                      Match preview
+                  {extractPreview.status === 'loading' ? (
+                    <Skeleton variant="rounded" animation="wave" height={120} sx={{ borderRadius: 1 }} />
+                  ) : extractPreview.status === 'error' ? (
+                    <Typography variant="body2" color="warning.main">
+                      {extractPreview.error ?? 'Preview failed.'}
                     </Typography>
-
-                    {extractPreview.status === 'loading' ? (
-                      <Skeleton variant="rounded" animation="wave" height={120} sx={{ borderRadius: 1 }} />
-                    ) : extractPreview.status === 'error' ? (
-                      <Typography variant="body2" color="warning.main">
-                        {extractPreview.error ?? 'Preview failed.'}
-                      </Typography>
-                    ) : extractPreview.status === 'empty' ? (
-                      <Typography variant="body2" color="text.secondary">
-                        No matching mail found — add matcher regexes, or widen your rules, then try again.
-                      </Typography>
-                    ) : extractPreview.status === 'ready' && extractPreview.sourceMail ? (
-                      (() => {
-                        const subRx = String(form.subject_extract_regex ?? '').trim()
-                        const bodyRx = String(form.body_extract_regex ?? '').trim()
-                        const snipRx = String(form.snippet_extract_regex ?? '').trim()
-                        const anyExtractRx = subRx || bodyRx || snipRx
-                        return (
-                          <Stack spacing={1.25}>
-                            {!anyExtractRx ? (
-                              <Typography variant="body2" color="text.secondary">
-                                Add at least one extract regex above to preview captures.
+                  ) : extractPreview.status === 'empty' ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No matching mail found — add matcher regexes, or widen your rules, then try again.
+                    </Typography>
+                  ) : extractPreview.status === 'ready' && extractPreview.sourceMail ? (
+                    (() => {
+                      const subRx = String(form.subject_extract_regex ?? '').trim()
+                      const bodyRx = String(form.body_extract_regex ?? '').trim()
+                      const snipRx = String(form.snippet_extract_regex ?? '').trim()
+                      const anyExtractRx = subRx || bodyRx || snipRx
+                      return (
+                        <Stack spacing={1.25}>
+                          {!anyExtractRx ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Add at least one extract regex above to preview captures.
+                            </Typography>
+                          ) : null}
+                          {subRx ? (
+                            <Box>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mb: 0.5 }}
+                              >
+                                Subject
                               </Typography>
-                            ) : null}
-                            {subRx ? (
-                              <Box>
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  sx={{ display: 'block', mb: 0.5 }}
-                                >
-                                  Subject
-                                </Typography>
-                                <RegexHaystackHighlight field={extractPreview.regexFields?.subject} />
-                              </Box>
-                            ) : null}
-                            {bodyRx ? (
-                              <Box>
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  sx={{ display: 'block', mb: 0.5 }}
-                                >
-                                  Body
-                                </Typography>
-                                <RegexHaystackHighlight field={extractPreview.regexFields?.body} />
-                              </Box>
-                            ) : null}
-                            {snipRx ? (
-                              <Box>
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  sx={{ display: 'block', mb: 0.5 }}
-                                >
-                                  Snippet
-                                </Typography>
-                                <RegexHaystackHighlight field={extractPreview.regexFields?.snippet} />
-                              </Box>
-                            ) : null}
-                          </Stack>
-                        )
-                      })()
-                    ) : null}
-                  </Box>
-                ) : null}
+                              <RegexHaystackHighlight field={extractPreview.regexFields?.subject} />
+                            </Box>
+                          ) : null}
+                          {bodyRx ? (
+                            <Box>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mb: 0.5 }}
+                              >
+                                Body
+                              </Typography>
+                              <RegexHaystackHighlight field={extractPreview.regexFields?.body} />
+                            </Box>
+                          ) : null}
+                          {snipRx ? (
+                            <Box>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mb: 0.5 }}
+                              >
+                                Snippet
+                              </Typography>
+                              <RegexHaystackHighlight field={extractPreview.regexFields?.snippet} />
+                            </Box>
+                          ) : null}
+                        </Stack>
+                      )
+                    })()
+                  ) : null}
+                </Box>
               </Stack>
             ) : null}
 
