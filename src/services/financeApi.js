@@ -6,7 +6,6 @@ import {
   apiBasePath,
   emailsApi,
   metadataApi,
-  transactionsApi,
   appConfigApi,
   mailAccountsApi,
 } from './apiConfig'
@@ -25,6 +24,43 @@ export function apiErrorMessage(error) {
     if (typeof detail.message === 'string') return detail.message
   }
   return error?.message ?? 'Request failed'
+}
+
+function apiAbsoluteUrl(pathAndQuery) {
+  const base = (apiBasePath || '').replace(/\/+$/, '')
+  const rel = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`
+  return base ? `${base}${rel}` : rel
+}
+
+/** GET JSON from `/api/v1/...` with explicit query params (avoids OpenAPI positional arg drift). */
+async function fetchApiJson(path, searchParams) {
+  const params =
+    searchParams instanceof URLSearchParams ? searchParams : new URLSearchParams()
+  const qs = params.toString()
+  const rel = path.startsWith('/') ? path : `/${path}`
+  const url = apiAbsoluteUrl(qs ? `${rel}?${qs}` : rel)
+  const res = await fetch(url, { headers: { Accept: 'application/json' } })
+  const text = await res.text()
+  let data = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
+  if (!res.ok) {
+    const err = new Error(
+      apiErrorMessage({
+        response: { data },
+        message: text || res.statusText || `HTTP ${res.status}`,
+      }),
+    )
+    err.status = res.status
+    err.response = { data }
+    throw err
+  }
+  return data
 }
 
 /** GET /api/v1/meta — high-level backend status for gating the UI. */
@@ -385,32 +421,7 @@ export async function listAccountParties({ from, to, kind } = {}) {
     if (toParam) params.set('to', toParam)
     if (kind === 'merchant' || kind === 'counterparty') params.set('kind', kind)
 
-    const base = (apiBasePath || '').replace(/\/+$/, '')
-    const qs = params.toString()
-    const path = `/api/v1/accounts/parties${qs ? `?${qs}` : ''}`
-    const abs = base ? `${base}${path}` : path
-    const res = await fetch(abs, { headers: { Accept: 'application/json' } })
-    const text = await res.text()
-    let data = null
-    if (text) {
-      try {
-        data = JSON.parse(text)
-      } catch {
-        data = null
-      }
-    }
-    if (!res.ok) {
-      const detail = data?.detail
-      let msg
-      if (typeof detail === 'string') msg = detail
-      else if (detail && typeof detail.message === 'string') msg = detail.message
-      else if (Array.isArray(detail)) {
-        msg = detail.map((d) => d?.msg ?? d).filter(Boolean).join(', ')
-      } else {
-        msg = text || res.statusText || `HTTP ${res.status}`
-      }
-      throw new Error(msg)
-    }
+    const data = await fetchApiJson('/api/v1/accounts/parties', params)
     return {
       merchants: Array.isArray(data?.merchants) ? data.merchants : [],
       counterparties: Array.isArray(data?.counterparties) ? data.counterparties : [],
@@ -535,26 +546,19 @@ export async function listTransactions({
       ? String(counterparty).trim()
       : undefined
 
-  // Arg order must match generated TransactionsApi: … dateTo, counterparty, search, sortBy, sortOrder.
-  const txResult = await transactionsApi.listTransactionsApiV1TransactionsGet(
-    currentPage,
-    currentPageSize,
-    undefined,
-    providerParam,
-    undefined,
-    directionParam,
-    fromParam,
-    toParam,
-    undefined,
-    undefined,
-    counterpartyParam,
-    search,
-    sortBy,
-    sortOrder,
-    undefined,
-  )
+  const params = new URLSearchParams()
+  params.set('page', String(currentPage))
+  params.set('page_size', String(currentPageSize))
+  if (providerParam) params.set('provider', providerParam)
+  if (directionParam) params.set('direction', directionParam)
+  if (fromParam) params.set('from', fromParam)
+  if (toParam) params.set('to', toParam)
+  if (counterpartyParam) params.set('counterparty', counterpartyParam)
+  if (search) params.set('search', search)
+  params.set('sort_by', sortBy)
+  params.set('sort_order', sortOrder)
 
-  const body = txResult.data
+  const body = await fetchApiJson('/api/v1/transactions', params)
   const items = (body.items ?? []).map((tx) => mapTransactionRow(tx))
 
   return {
@@ -634,15 +638,13 @@ export async function findFirstTransactionRowByMailId(
 
 /** GET /api/v1/transactions/distinct — provider / merchant / counterparty pickers (scoped to range). */
 export async function listTransactionDistinctCatalog({ from, to } = {}) {
-  const res =
-    await transactionsApi.distinctTransactionCatalogApiV1TransactionsDistinctGet(
-      true,
-      from ?? undefined,
-      to ?? undefined,
-      undefined,
-      undefined,
-    )
-  return res.data
+  const params = new URLSearchParams()
+  params.set('include_merchants_in_counterparties', 'true')
+  const fromParam = normalizeYmd(from)
+  const toParam = normalizeYmd(to)
+  if (fromParam) params.set('from', fromParam)
+  if (toParam) params.set('to', toParam)
+  return fetchApiJson('/api/v1/transactions/distinct', params)
 }
 
 /**

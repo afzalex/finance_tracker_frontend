@@ -3,7 +3,6 @@ import {
   accountsApi,
   analyticsApi,
   emailsApi,
-  transactionsApi,
 } from '../../services/apiConfig'
 import {
   apiErrorMessage,
@@ -21,12 +20,10 @@ import {
 import { mockStats, mockAnalytics } from '../../mocks/mockData'
 
 vi.mock('../../services/apiConfig', () => ({
+  apiBasePath: '',
   emailsApi: {
     getEmailByMailIdApiV1EmailsMailIdGet: vi.fn(),
     topEmailsWithTransactionsApiV1EmailsTopWithTransactionsGet: vi.fn(),
-  },
-  transactionsApi: {
-    listTransactionsApiV1TransactionsGet: vi.fn(),
   },
   analyticsApi: {
     transactionSummaryApiV1AnalyticsTransactionSummaryGet: vi.fn(),
@@ -38,6 +35,19 @@ vi.mock('../../services/apiConfig', () => ({
     putAccountApiV1AccountsPut: vi.fn(),
   },
 }))
+
+function mockFetchJson(data, { ok = true, status = 200, statusText = 'OK' } = {}) {
+  return vi.fn().mockResolvedValue({
+    ok,
+    status,
+    statusText,
+    text: async () => (data == null ? '' : JSON.stringify(data)),
+  })
+}
+
+function lastFetchUrl() {
+  return vi.mocked(global.fetch).mock.calls.at(-1)?.[0] ?? ''
+}
 
 describe('apiErrorMessage', () => {
   it('returns string detail from API response', () => {
@@ -145,7 +155,7 @@ describe('listTopEmailsWithTransactions', () => {
 
 describe('listTransactions', () => {
   beforeEach(() => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockReset()
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   const baseTx = {
@@ -169,34 +179,25 @@ describe('listTransactions', () => {
   }
 
   it('maps items and uses API response totals', async () => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
-      data: {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({
         items: [baseTx],
         total: 42,
         page: 2,
         page_size: 25,
-      },
-    })
+      }),
+    )
 
     const out = await listTransactions({ query: 'coffee', page: 2, pageSize: 25 })
 
-    expect(transactionsApi.listTransactionsApiV1TransactionsGet).toHaveBeenCalledWith(
-      2,
-      25,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'coffee',
-      'transacted_at',
-      'desc',
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toContain('/api/v1/transactions?')
+    expect(url).toContain('page=2')
+    expect(url).toContain('page_size=25')
+    expect(url).toContain('search=coffee')
+    expect(url).toContain('sort_by=transacted_at')
+    expect(url).toContain('sort_order=desc')
 
     expect(out.total).toBe(42)
     expect(out.page).toBe(2)
@@ -208,62 +209,33 @@ describe('listTransactions', () => {
   })
 
   it('passes valid YYYY-MM-DD from/to and drops invalid `to`', async () => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 10 },
-    })
+    vi.stubGlobal('fetch', mockFetchJson({ items: [], total: 0, page: 1, page_size: 10 }))
     await listTransactions({ from: '2024-01-15', to: 'bad', page: 1, pageSize: 10 })
-    expect(transactionsApi.listTransactionsApiV1TransactionsGet).toHaveBeenCalledWith(
-      1,
-      10,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      '2024-01-15',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'transacted_at',
-      'desc',
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toContain('from=2024-01-15')
+    expect(url).not.toContain('to=')
+    expect(url).not.toContain('counterparty=2024-01-15')
+    expect(url).not.toContain('search=')
   })
 
   it('passes counterparty as a query param', async () => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 10 },
-    })
+    vi.stubGlobal('fetch', mockFetchJson({ items: [], total: 0, page: 1, page_size: 10 }))
     await listTransactions({ counterparty: '  Acme Co ', page: 1, pageSize: 10 })
-    expect(transactionsApi.listTransactionsApiV1TransactionsGet).toHaveBeenCalledWith(
-      1,
-      10,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'Acme Co',
-      undefined,
-      'transacted_at',
-      'desc',
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toMatch(/counterparty=Acme(\+|%20)Co/)
+    expect(url).not.toContain('search=')
   })
 
   it('uses positive amount for CREDIT direction', async () => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
-      data: {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({
         items: [{ ...baseTx, direction: 'CREDIT', amount_parsed: 100 }],
         total: 1,
         page: 1,
         page_size: 10,
-      },
-    })
+      }),
+    )
 
     const out = await listTransactions({})
     expect(out.items[0].amount).toBe(100)
@@ -272,7 +244,7 @@ describe('listTransactions', () => {
 
 describe('findFirstTransactionRowByMailId', () => {
   beforeEach(() => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockReset()
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   const tx = {
@@ -297,13 +269,29 @@ describe('findFirstTransactionRowByMailId', () => {
 
   it('returns first row whose raw.mail_id matches across pages', async () => {
     const txTarget = { ...tx, id: 99, mail_id: 'gmail-target' }
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet)
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce({
-        data: { items: [{ ...tx, id: 2, mail_id: 'other' }], total: 5, page: 1, page_size: 1 },
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            items: [{ ...tx, id: 2, mail_id: 'other' }],
+            total: 5,
+            page: 1,
+            page_size: 1,
+          }),
       })
       .mockResolvedValueOnce({
-        data: { items: [txTarget], total: 5, page: 2, page_size: 1 },
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            items: [txTarget],
+            total: 5,
+            page: 2,
+            page_size: 1,
+          }),
       })
+    vi.stubGlobal('fetch', fetchMock)
 
     const row = await findFirstTransactionRowByMailId('gmail-target', {
       pageSize: 1,
@@ -311,13 +299,14 @@ describe('findFirstTransactionRowByMailId', () => {
     })
     expect(row?.id).toBe('99')
     expect(row?.raw?.mail_id).toBe('gmail-target')
-    expect(transactionsApi.listTransactionsApiV1TransactionsGet).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('returns null when not found within maxPages', async () => {
-    vi.mocked(transactionsApi.listTransactionsApiV1TransactionsGet).mockResolvedValue({
-      data: { items: [tx], total: 1, page: 1, page_size: 25 },
-    })
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({ items: [tx], total: 1, page: 1, page_size: 25 }),
+    )
     await expect(
       findFirstTransactionRowByMailId('missing', { pageSize: 25, maxPages: 2 }),
     ).resolves.toBeNull()
