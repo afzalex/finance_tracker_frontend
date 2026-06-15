@@ -2,7 +2,6 @@ import { mockAnalytics, mockStats, mockTransactions } from '../mocks/mockData'
 import {
   accountsApi,
   adminApi,
-  analyticsApi,
   apiBasePath,
   emailsApi,
   metadataApi,
@@ -251,15 +250,9 @@ export async function reprocessEmailByMailId(mailId) {
 
 /** GET /api/v1/emails/unparsed — list items omit body/snippet; includes queue `id` (unparsed_message_id). */
 export async function listUnparsedEmails({ from, to } = {}) {
-  const fromParam = normalizeYmd(from)
-  const toParam = normalizeYmd(to)
-  const res = await emailsApi.listUnparsedEmailsApiV1EmailsUnparsedGet(
-    fromParam,
-    toParam,
-    undefined,
-    undefined,
-  )
-  return res.data
+  const params = new URLSearchParams()
+  appendDateRangeParams(params, { from, to })
+  return fetchApiJson('/api/v1/emails/unparsed', params)
 }
 
 /**
@@ -315,25 +308,10 @@ export async function getDashboardStats() {
  * @returns {Promise<{ net: number, totalCredit: number, totalDebit: number, count: number, creditCount: number, debitCount: number }>}
  */
 export async function getTransactionSummary({ from, to } = {}) {
-  const fromParam = normalizeYmd(from)
-  const toParam = normalizeYmd(to)
-  if (!fromParam || !toParam) {
-    throw new Error('from and to dates (YYYY-MM-DD) are required')
-  }
   try {
-    const res =
-      await analyticsApi.transactionSummaryApiV1AnalyticsTransactionSummaryGet(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        fromParam,
-        toParam,
-        undefined,
-        undefined,
-        undefined,
-      )
-    const d = res.data
+    const params = new URLSearchParams()
+    appendDateRangeParams(params, { from, to, required: true })
+    const d = await fetchApiJson('/api/v1/analytics/transaction-summary', params)
     return {
       net: d.amount ?? 0,
       totalCredit: d.credit_amount ?? 0,
@@ -368,16 +346,11 @@ export async function getTransactionSummary({ from, to } = {}) {
  */
 export async function listAccounts({ from, to } = {}) {
   try {
-    const fromParam = normalizeYmd(from)
-    const toParam = normalizeYmd(to)
-    const res = await accountsApi.listAccountsApiV1AccountsGet(
-      fromParam,
-      toParam,
-      undefined,
-      undefined,
-    )
-    const items = res.data ?? []
-    return items.map((a) => {
+    const params = new URLSearchParams()
+    appendDateRangeParams(params, { from, to })
+    const items = await fetchApiJson('/api/v1/accounts', params)
+    const rows = Array.isArray(items) ? items : []
+    return rows.map((a) => {
       const name = String(a.display_name ?? '').trim()
       const net = a.amount
       const conflict = a._conflict
@@ -415,10 +388,7 @@ export async function listAccounts({ from, to } = {}) {
 export async function listAccountParties({ from, to, kind } = {}) {
   try {
     const params = new URLSearchParams()
-    const fromParam = normalizeYmd(from)
-    const toParam = normalizeYmd(to)
-    if (fromParam) params.set('from', fromParam)
-    if (toParam) params.set('to', toParam)
+    appendDateRangeParams(params, { from, to })
     if (kind === 'merchant' || kind === 'counterparty') params.set('kind', kind)
 
     const data = await fetchApiJson('/api/v1/accounts/parties', params)
@@ -427,7 +397,6 @@ export async function listAccountParties({ from, to, kind } = {}) {
       counterparties: Array.isArray(data?.counterparties) ? data.counterparties : [],
     }
   } catch (err) {
-    if (err instanceof Error) throw err
     throw new Error(apiErrorMessage(err))
   }
 }
@@ -488,6 +457,18 @@ function normalizeYmd(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined
 }
 
+/** Append optional or required `from` / `to` (YYYY-MM-DD) to query params. */
+function appendDateRangeParams(params, { from, to, required = false } = {}) {
+  const fromParam = normalizeYmd(from)
+  const toParam = normalizeYmd(to)
+  if (required && (!fromParam || !toParam)) {
+    throw new Error('from and to dates (YYYY-MM-DD) are required')
+  }
+  if (fromParam) params.set('from', fromParam)
+  if (toParam) params.set('to', toParam)
+  return { from: fromParam, to: toParam }
+}
+
 /**
  * @param {Date} [now]
  * @returns {{ from: string, to: string }} YYYY-MM-DD — `from` = 1st of month 12 months before `now`’s month; `to` = local calendar date of `now`.
@@ -539,8 +520,6 @@ export async function listTransactions({
       : undefined
   const directionParam =
     direction === 'DEBIT' || direction === 'CREDIT' ? direction : undefined
-  const fromParam = normalizeYmd(from)
-  const toParam = normalizeYmd(to)
   const counterpartyParam =
     counterparty != null && String(counterparty).trim() !== ''
       ? String(counterparty).trim()
@@ -551,8 +530,7 @@ export async function listTransactions({
   params.set('page_size', String(currentPageSize))
   if (providerParam) params.set('provider', providerParam)
   if (directionParam) params.set('direction', directionParam)
-  if (fromParam) params.set('from', fromParam)
-  if (toParam) params.set('to', toParam)
+  appendDateRangeParams(params, { from, to })
   if (counterpartyParam) params.set('counterparty', counterpartyParam)
   if (search) params.set('search', search)
   params.set('sort_by', sortBy)
@@ -640,10 +618,7 @@ export async function findFirstTransactionRowByMailId(
 export async function listTransactionDistinctCatalog({ from, to } = {}) {
   const params = new URLSearchParams()
   params.set('include_merchants_in_counterparties', 'true')
-  const fromParam = normalizeYmd(from)
-  const toParam = normalizeYmd(to)
-  if (fromParam) params.set('from', fromParam)
-  if (toParam) params.set('to', toParam)
+  appendDateRangeParams(params, { from, to })
   return fetchApiJson('/api/v1/transactions/distinct', params)
 }
 
@@ -655,8 +630,8 @@ export async function listTransactionDistinctCatalog({ from, to } = {}) {
  * @param {{ from?: string, to?: string }} [opts]
  */
 export async function getAnalytics({ from, to } = {}) {
-  const fromP = normalizeYmd(from)
-  const toP = normalizeYmd(to)
+  const params = new URLSearchParams()
+  const { from: fromP, to: toP } = appendDateRangeParams(params, { from, to })
   if (!fromP || !toP) {
     await sleep(150)
     return mockAnalytics
@@ -664,18 +639,8 @@ export async function getAnalytics({ from, to } = {}) {
 
   let cashflow
   try {
-    const res = await analyticsApi.cashflowApiV1AnalyticsCashflowGet(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      fromP,
-      toP,
-      undefined,
-      undefined,
-      undefined,
-    )
-    cashflow = (res.data ?? [])
+    const data = await fetchApiJson('/api/v1/analytics/cashflow', params)
+    cashflow = (data ?? [])
       .map((row) => ({
         month: row.month,
         credit: row.credit ?? 0,
@@ -725,27 +690,19 @@ export async function listTopMerchants({
   to,
   limit = DEFAULT_TOP_MERCHANTS_LIMIT,
 } = {}) {
-  const fromP = normalizeYmd(from)
-  const toP = normalizeYmd(to)
-  if (!fromP || !toP) {
-    throw new Error('from and to dates (YYYY-MM-DD) are required')
-  }
+  const params = new URLSearchParams()
+  const { from: fromP, to: toP } = appendDateRangeParams(params, {
+    from,
+    to,
+    required: true,
+  })
   const month =
     fromP.slice(0, 7) === toP.slice(0, 7) ? fromP.slice(0, 7) : undefined
   try {
-    const res = await analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet(
-      month,
-      limit,
-      undefined,
-      undefined,
-      undefined,
-      fromP,
-      toP,
-      undefined,
-      undefined,
-      undefined,
-    )
-    return (res.data ?? []).map((row) => {
+    if (month) params.set('month', month)
+    params.set('limit', String(limit))
+    const data = await fetchApiJson('/api/v1/analytics/top-merchants', params)
+    return (data ?? []).map((row) => {
       const m = row.merchant
       const merchant =
         m != null && String(m).trim() !== '' ? String(m).trim() : '—'

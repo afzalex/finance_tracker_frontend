@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   accountsApi,
-  analyticsApi,
   emailsApi,
 } from '../../services/apiConfig'
 import {
@@ -25,13 +24,7 @@ vi.mock('../../services/apiConfig', () => ({
     getEmailByMailIdApiV1EmailsMailIdGet: vi.fn(),
     topEmailsWithTransactionsApiV1EmailsTopWithTransactionsGet: vi.fn(),
   },
-  analyticsApi: {
-    transactionSummaryApiV1AnalyticsTransactionSummaryGet: vi.fn(),
-    topMerchantsApiV1AnalyticsTopMerchantsGet: vi.fn(),
-    cashflowApiV1AnalyticsCashflowGet: vi.fn(),
-  },
   accountsApi: {
-    listAccountsApiV1AccountsGet: vi.fn(),
     putAccountApiV1AccountsPut: vi.fn(),
   },
 }))
@@ -315,12 +308,13 @@ describe('findFirstTransactionRowByMailId', () => {
 
 describe('listAccounts', () => {
   beforeEach(() => {
-    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockReset()
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   it('maps API rows for the Accounts page', async () => {
-    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockResolvedValue({
-      data: [
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson([
         {
           account_id: 'chk-1',
           provider: 'chase',
@@ -334,12 +328,12 @@ describe('listAccounts', () => {
           debit_count: 5,
           id: 1,
         },
-      ],
-    })
+      ]),
+    )
 
     const rows = await listAccounts()
 
-    expect(accountsApi.listAccountsApiV1AccountsGet).toHaveBeenCalled()
+    expect(lastFetchUrl()).toContain('/api/v1/accounts')
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
       id: '1',
@@ -358,8 +352,9 @@ describe('listAccounts', () => {
   })
 
   it('sets hasConflict when _conflict is non-empty', async () => {
-    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockResolvedValue({
-      data: [
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson([
         {
           account_id: 'a1',
           provider: 'p',
@@ -371,16 +366,17 @@ describe('listAccounts', () => {
           debit_count: 1,
           _conflict: [{ provider: 'x', count: 1 }],
         },
-      ],
-    })
+      ]),
+    )
 
     const rows = await listAccounts()
     expect(rows[0].hasConflict).toBe(true)
   })
 
   it('uses provider · account_id when display_name is blank', async () => {
-    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockResolvedValue({
-      data: [
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson([
         {
           account_id: 'x',
           provider: 'bank',
@@ -391,8 +387,8 @@ describe('listAccounts', () => {
           debit_amount: 0,
           debit_count: 0,
         },
-      ],
-    })
+      ]),
+    )
 
     const rows = await listAccounts()
     expect(rows[0].name).toBe('')
@@ -402,9 +398,10 @@ describe('listAccounts', () => {
   })
 
   it('throws with apiErrorMessage when the request fails', async () => {
-    vi.mocked(accountsApi.listAccountsApiV1AccountsGet).mockRejectedValue({
-      response: { data: { detail: 'nope' } },
-    })
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({ detail: 'nope' }, { ok: false, status: 500 }),
+    )
 
     await expect(listAccounts()).rejects.toThrow('nope')
   })
@@ -447,24 +444,21 @@ describe('upsertAccount', () => {
 
 describe('getTransactionSummary', () => {
   beforeEach(() => {
-    vi.mocked(
-      analyticsApi.transactionSummaryApiV1AnalyticsTransactionSummaryGet,
-    ).mockReset()
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   it('maps TransactionSummaryRead to UI fields', async () => {
-    vi.mocked(
-      analyticsApi.transactionSummaryApiV1AnalyticsTransactionSummaryGet,
-    ).mockResolvedValue({
-      data: {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({
         amount: 12.5,
         count: 9,
         credit_amount: 100,
         credit_count: 4,
         debit_amount: 87.5,
         debit_count: 5,
-      },
-    })
+      }),
+    )
 
     await expect(
       getTransactionSummary({ from: '2026-04-01', to: '2026-04-30' }),
@@ -476,19 +470,11 @@ describe('getTransactionSummary', () => {
       creditCount: 4,
       debitCount: 5,
     })
-    expect(
-      analyticsApi.transactionSummaryApiV1AnalyticsTransactionSummaryGet,
-    ).toHaveBeenCalledWith(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      '2026-04-01',
-      '2026-04-30',
-      undefined,
-      undefined,
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toContain('/api/v1/analytics/transaction-summary?')
+    expect(url).toContain('from=2026-04-01')
+    expect(url).toContain('to=2026-04-30')
+    expect(url).not.toContain('search=')
   })
 
   it('throws when from or to is missing', async () => {
@@ -498,11 +484,10 @@ describe('getTransactionSummary', () => {
   })
 
   it('throws with apiErrorMessage when the request fails', async () => {
-    vi.mocked(
-      analyticsApi.transactionSummaryApiV1AnalyticsTransactionSummaryGet,
-    ).mockRejectedValue({
-      response: { data: { detail: 'bad range' } },
-    })
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({ detail: 'bad range' }, { ok: false, status: 400 }),
+    )
 
     await expect(
       getTransactionSummary({ from: '2026-04-01', to: '2026-04-30' }),
@@ -512,15 +497,14 @@ describe('getTransactionSummary', () => {
 
 describe('listTopMerchants', () => {
   beforeEach(() => {
-    vi.mocked(analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet).mockReset()
+    vi.stubGlobal('fetch', vi.fn())
   })
 
   it('passes month when range is a single calendar month', async () => {
-    vi.mocked(analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet).mockResolvedValue({
-      data: [
-        { merchant: 'Acme', total: 10, transaction_count: 2 },
-      ],
-    })
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson([{ merchant: 'Acme', total: 10, transaction_count: 2 }]),
+    )
 
     await expect(
       listTopMerchants({ from: '2026-04-01', to: '2026-04-15', limit: 20 }),
@@ -531,48 +515,28 @@ describe('listTopMerchants', () => {
         transactionCount: 2,
       },
     ])
-    expect(
-      analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet,
-    ).toHaveBeenCalledWith(
-      '2026-04',
-      20,
-      undefined,
-      undefined,
-      undefined,
-      '2026-04-01',
-      '2026-04-15',
-      undefined,
-      undefined,
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toContain('month=2026-04')
+    expect(url).toContain('limit=20')
+    expect(url).toContain('from=2026-04-01')
+    expect(url).toContain('to=2026-04-15')
   })
 
   it('omits month when range spans multiple months', async () => {
-    vi.mocked(analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet).mockResolvedValue({
-      data: [],
-    })
+    vi.stubGlobal('fetch', mockFetchJson([]))
 
     await listTopMerchants({ from: '2026-03-01', to: '2026-04-30' })
-    expect(
-      analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet,
-    ).toHaveBeenCalledWith(
-      undefined,
-      50,
-      undefined,
-      undefined,
-      undefined,
-      '2026-03-01',
-      '2026-04-30',
-      undefined,
-      undefined,
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).not.toContain('month=')
+    expect(url).toContain('from=2026-03-01')
+    expect(url).toContain('to=2026-04-30')
   })
 
   it('throws with apiErrorMessage when the request fails', async () => {
-    vi.mocked(analyticsApi.topMerchantsApiV1AnalyticsTopMerchantsGet).mockRejectedValue({
-      response: { data: { detail: 'nope' } },
-    })
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson({ detail: 'nope' }, { ok: false, status: 500 }),
+    )
 
     await expect(
       listTopMerchants({ from: '2026-04-01', to: '2026-04-30' }),
@@ -594,7 +558,7 @@ describe('Mock Services', () => {
 
 describe('getAnalytics', () => {
   beforeEach(() => {
-    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockReset()
+    vi.stubGlobal('fetch', vi.fn())
     vi.useFakeTimers()
   })
 
@@ -604,8 +568,9 @@ describe('getAnalytics', () => {
 
   it('calls cashflow API with the same from/to as the analytics period', async () => {
     vi.setSystemTime(new Date(2026, 0, 15, 12, 0, 0))
-    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockResolvedValue({
-      data: [
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson([
         {
           month: '2026-01',
           credit: 100,
@@ -613,22 +578,16 @@ describe('getAnalytics', () => {
           total: 50,
           count: 3,
         },
-      ],
-    })
+      ]),
+    )
 
     const out = await getAnalytics({ from: '2026-01-01', to: '2026-01-31' })
 
-    expect(analyticsApi.cashflowApiV1AnalyticsCashflowGet).toHaveBeenCalledWith(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      '2026-01-01',
-      '2026-01-31',
-      undefined,
-      undefined,
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toContain('/api/v1/analytics/cashflow?')
+    expect(url).toContain('from=2026-01-01')
+    expect(url).toContain('to=2026-01-31')
+    expect(url).not.toContain('search=')
     expect(out.cashflow).toEqual([
       { month: '2026-01', credit: 100, debit: 50, total: 50, count: 3 },
     ])
@@ -641,13 +600,14 @@ describe('getAnalytics', () => {
 
   it('sorts cashflow by month descending', async () => {
     vi.setSystemTime(new Date(2026, 2, 10, 12, 0, 0))
-    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockResolvedValue({
-      data: [
+    vi.stubGlobal(
+      'fetch',
+      mockFetchJson([
         { month: '2026-01', credit: 1, debit: 0, total: 1, count: 1 },
         { month: '2026-03', credit: 3, debit: 0, total: 3, count: 1 },
         { month: '2026-02', credit: 2, debit: 0, total: 2, count: 1 },
-      ],
-    })
+      ]),
+    )
 
     const out = await getAnalytics({ from: '2026-01-01', to: '2026-03-31' })
 
@@ -656,22 +616,12 @@ describe('getAnalytics', () => {
 
   it('passes through the requested from/to to the cashflow API', async () => {
     vi.setSystemTime(new Date(2026, 1, 20, 12, 0, 0))
-    vi.mocked(analyticsApi.cashflowApiV1AnalyticsCashflowGet).mockResolvedValue({
-      data: [],
-    })
+    vi.stubGlobal('fetch', mockFetchJson([]))
 
     await getAnalytics({ from: '2025-03-10', to: '2026-02-20' })
 
-    expect(analyticsApi.cashflowApiV1AnalyticsCashflowGet).toHaveBeenCalledWith(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      '2025-03-10',
-      '2026-02-20',
-      undefined,
-      undefined,
-      undefined,
-    )
+    const url = lastFetchUrl()
+    expect(url).toContain('from=2025-03-10')
+    expect(url).toContain('to=2026-02-20')
   })
 })
