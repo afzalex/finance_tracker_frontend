@@ -91,22 +91,43 @@ function RootLayoutInner() {
           <Typography variant="body2" color="inherit" component="span" sx={{ flexShrink: 0 }}>
             Finance Tracker
           </Typography>
-          {meta?.mail_user_email ? (
-            <Typography
-              variant="body2"
-              color="inherit"
-              sx={{
-                ml: 'auto',
-                textAlign: 'right',
-                opacity: 0.85,
-                minWidth: 0,
-                pl: 1,
-                wordBreak: 'break-word',
-              }}
-            >
-              Connected: {meta.mail_user_email}
-            </Typography>
-          ) : null}
+          <Box
+            sx={{
+              ml: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 1.5,
+              minWidth: 0,
+            }}
+          >
+            {meta?.mail_user_email ? (
+              <Typography
+                variant="body2"
+                color="inherit"
+                sx={{
+                  textAlign: 'right',
+                  opacity: 0.85,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Connected: {meta.mail_user_email}
+              </Typography>
+            ) : null}
+            {meta?.app_version ? (
+              <Typography
+                variant="body2"
+                color="inherit"
+                aria-label={`Application version ${meta.app_version}`}
+                sx={{ opacity: 0.7, flexShrink: 0 }}
+              >
+                v{meta.app_version}
+              </Typography>
+            ) : null}
+          </Box>
         </Box>
       </Box>
     </Box>
@@ -120,4 +141,3 @@ export default function RootLayout() {
     </MobileNavProvider>
   )
 }
-

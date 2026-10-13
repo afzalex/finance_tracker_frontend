@@ -43,6 +43,11 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
   })
 
+  it('shows the backend app version in the footer', async () => {
+    renderApp('/')
+    expect(await screen.findByLabelText('Application version test')).toHaveTextContent('vtest')
+  })
+
   it('renders accounts route', async () => {
     renderApp('/accounts')
     expect(await screen.findByRole('heading', { name: 'Accounts' })).toBeInTheDocument()
