@@ -318,18 +318,33 @@ export default function ParsersSection({
     }
 
     try {
-      const raw = await postEmailMatchPreview(
-        {
-          subject_match_regex: form.subject_match_regex,
-          sender_match_regex: form.sender_match_regex,
-          body_match_regex: form.body_match_regex,
-          limit: 1,
-          lookback_days: MATCH_PREVIEW_LOOKBACK_DAYS,
-        },
-        { signal: ac.signal },
-      )
-      const { items } = normalizeMatchPreviewListResponse(raw)
-      const m = items[0]
+      let m = null
+
+      const reuseContextMail =
+        hasContextMail &&
+        contextMailMatch.status === 'ready' &&
+        contextMailMatch.matched === true &&
+        contextMailMatch.matchedMail
+
+      if (reuseContextMail) {
+        m = contextMailMatch.matchedMail
+      } else if (hasContextMail && contextMailMatch.status === 'loading') {
+        return
+      } else {
+        const raw = await postEmailMatchPreview(
+          {
+            subject_match_regex: form.subject_match_regex,
+            sender_match_regex: form.sender_match_regex,
+            body_match_regex: form.body_match_regex,
+            limit: 1,
+            lookback_days: MATCH_PREVIEW_LOOKBACK_DAYS,
+          },
+          { signal: ac.signal },
+        )
+        const { items } = normalizeMatchPreviewListResponse(raw)
+        m = items[0]
+      }
+
       if (!m) {
         if (extractPreviewAbortRef.current === ac) extractPreviewAbortRef.current = null
         setExtractPreview({
@@ -373,6 +388,9 @@ export default function ParsersSection({
       })
     }
   }, [
+    contextMailMatch.matched,
+    contextMailMatch.matchedMail,
+    contextMailMatch.status,
     dialog.open,
     form.body_extract_regex,
     form.body_match_regex,
@@ -380,6 +398,7 @@ export default function ParsersSection({
     form.snippet_extract_regex,
     form.subject_extract_regex,
     form.subject_match_regex,
+    hasContextMail,
   ])
 
   useEffect(() => {
@@ -397,6 +416,9 @@ export default function ParsersSection({
     }, delay)
     return () => window.clearTimeout(id)
   }, [
+    contextMailMatch.matched,
+    contextMailMatch.matchedMail,
+    contextMailMatch.status,
     dialog.open,
     extractPreviewEnabled,
     form.body_extract_regex,
@@ -405,6 +427,7 @@ export default function ParsersSection({
     form.snippet_extract_regex,
     form.subject_extract_regex,
     form.subject_match_regex,
+    hasContextMail,
     runExtractPreview,
   ])
 

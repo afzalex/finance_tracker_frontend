@@ -63,6 +63,12 @@ export function normalizeMatchPreviewListResponse(data) {
   return { windowLabel, items }
 }
 
+/** First normalized mail row from a match-preview response (context-mail or scan). */
+export function matchedMailFromPreviewResponse(data) {
+  const { items } = normalizeMatchPreviewListResponse(data)
+  return items[0] ?? null
+}
+
 /**
  * Shared matcher UX for classification + parser rule dialogs (create and edit):
  * context-mail match badge, list match preview, debounced single-mail check.
@@ -94,6 +100,7 @@ export function useRuleMatcherPreview({
     notInCache: false,
     error: null,
     mailSubject: null,
+    matchedMail: null,
   })
 
   const fetchMatchingMailsPreview = useCallback(async () => {
@@ -183,6 +190,7 @@ export function useRuleMatcherPreview({
           notInCache: false,
           error: null,
           mailSubject: null,
+          matchedMail: null,
         })
         return
       }
@@ -193,6 +201,7 @@ export function useRuleMatcherPreview({
         error: null,
         notInCache: false,
         mailSubject: null,
+        matchedMail: null,
       }))
 
       try {
@@ -205,14 +214,15 @@ export function useRuleMatcherPreview({
           },
           { signal },
         )
-        const m = data?.matched
+        const matched = typeof data?.matched === 'boolean' ? data.matched : null
         const sub = data?.tested_mail?.subject
         setContextMailMatch({
           status: 'ready',
-          matched: typeof m === 'boolean' ? m : null,
+          matched,
           notInCache: false,
           error: null,
           mailSubject: typeof sub === 'string' && sub.trim() ? sub.trim() : null,
+          matchedMail: matched === true ? matchedMailFromPreviewResponse(data) : null,
         })
       } catch (e) {
         if (signal?.aborted) return
@@ -223,6 +233,7 @@ export function useRuleMatcherPreview({
             notInCache: true,
             error: null,
             mailSubject: null,
+            matchedMail: null,
           })
           return
         }
@@ -232,6 +243,7 @@ export function useRuleMatcherPreview({
           notInCache: false,
           error: apiErrorMessage(e),
           mailSubject: null,
+          matchedMail: null,
         })
       }
     },
@@ -247,6 +259,7 @@ export function useRuleMatcherPreview({
           notInCache: false,
           error: null,
           mailSubject: null,
+          matchedMail: null,
         })
       })
       return undefined
